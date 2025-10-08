@@ -127,7 +127,7 @@ jobs:
       - name: Run tests
         run: |
           cd Dep.Tests/puppeteer/engine
-          python run.py --disable_animation
+          python run.py --disable_animation --config_params puppeteerOptions.headless=true
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
