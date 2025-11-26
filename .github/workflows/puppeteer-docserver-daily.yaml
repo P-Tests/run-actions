@@ -1,0 +1,112 @@
+name: Puppeteer DocServer Daily Tests
+
+on:
+  workflow_dispatch:
+
+jobs:
+  puppeteer-docserver-daily:
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - os: windows-latest
+            platform: win
+          - os: macos-latest
+            platform: mac
+          - os: ubuntu-latest
+            platform: linux
+        provider: [docspace, ncoc, ocis, wopi, example]
+    
+    runs-on: ${{ matrix.config.os }}
+
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Set up nodejs
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'latest'
+
+      - name: Checkout main repository Dep.Tests
+        uses: actions/checkout@v4
+        with:
+          repository: ONLYOFFICE-data/Dep.Tests
+          path: Dep.Tests
+          token: ${{ secrets.READ_PAT }}
+
+      - name: Setup Git
+        run: |
+          git config --global user.name 'GitHub Actions'
+          git config --global user.email 'actions@github.com'
+
+          git config --global url."https://${{ secrets.READ_PAT }}@github.com/".insteadOf "https://github.com/"
+
+      - name: Init specific submodule
+        run: |
+          cd Dep.Tests
+          git submodule update --init --depth 1 puppeteer/files
+
+      - name: Add reports key to config
+        run: |
+          node -e "
+            const fs = require('fs');
+            const filePath = 'Dep.Tests/tools/report_portal/config.json';
+            const config = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+            
+            config.api_key = '${{ secrets.REPORT_KEY }}';
+            config.project_name = 'docsserver';
+            config.launch_name = 'Github Action Daily Tests';
+            
+            fs.writeFileSync(filePath, JSON.stringify(config, null, 2));
+          "
+
+      - name: Set headless mode for linux
+        if: matrix.config.os == 'ubuntu-latest'
+        run: |
+          node -e "
+            const fs = require('fs');
+            const filePath = 'Dep.Tests/puppeteer/config_chrome_linux.json';
+            const config = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+            
+            config.puppeteerOptions.headless = true;
+            
+            fs.writeFileSync(filePath, JSON.stringify(config, null, 2));
+          "
+
+      - name: Install dependencies
+        run: |
+          cd Dep.Tests/puppeteer/engine
+          npm install
+
+      - name: Configure Puppeteer sandbox
+        if: matrix.config.os == 'ubuntu-latest'
+        run: |
+          # Configure Puppeteer sandbox with https://pptr.dev/troubleshooting#issues-with-apparmor-on-ubuntu
+          # cd to Puppeteer cache directory (adjust the path if using a different cache directory)
+          CHROME_VERSION=$(ls ~/.cache/puppeteer/chrome/linux-* -d 2>/dev/null | head -n 1 | xargs basename 2>/dev/null || echo "")
+          if [ -z "$CHROME_VERSION" ]; then
+            echo "Chrome not installed yet, will be configured after npm install"
+          else
+            cd ~/.cache/puppeteer/chrome/$CHROME_VERSION/chrome-linux64/
+            sudo chown root:root chrome_sandbox
+            sudo chmod 4755 chrome_sandbox
+            # copy sandbox executable to a shared location
+            sudo cp -p chrome_sandbox /usr/local/sbin/chrome-devel-sandbox
+          fi
+          # export CHROME_DEVEL_SANDBOX env variable
+          echo "CHROME_DEVEL_SANDBOX=/usr/local/sbin/chrome-devel-sandbox" >> $GITHUB_ENV
+      
+      - name: Run daily tests
+        run: |
+          cd Dep.Tests/puppeteer/engine
+          python run.py --suite daily --disable_animation --config_params puppeteerOptions.headless=true --providers ${{ matrix.provider }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: out - ${{ matrix.config.os }} - ${{ matrix.provider }}
+          path: |
+            Dep.Tests/puppeteer/out
