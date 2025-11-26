@@ -1,7 +1,16 @@
-name: Puppeteer DocServer Daily Tests
+name: Puppeteer DocServer Suite Tests
 
 on:
   workflow_dispatch:
+    inputs:
+      suite:
+        description: 'Test suite to run'
+        required: true
+        type: choice
+        options:
+          - daily
+          - default
+        default: daily
 
 jobs:
   puppeteer-docserver-daily:
@@ -99,10 +108,10 @@ jobs:
           # export CHROME_DEVEL_SANDBOX env variable
           echo "CHROME_DEVEL_SANDBOX=/usr/local/sbin/chrome-devel-sandbox" >> $GITHUB_ENV
       
-      - name: Run daily tests
+      - name: Run tests
         run: |
           cd Dep.Tests/puppeteer/engine
-          python run.py --suite daily --disable_animation --config_params puppeteerOptions.headless=true --providers ${{ matrix.provider }}
+          python run.py --suite ${{ inputs.suite }} --disable_animation --config_params puppeteerOptions.headless=true --providers ${{ matrix.provider }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
