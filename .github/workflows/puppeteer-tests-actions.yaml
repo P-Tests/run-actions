@@ -91,7 +91,20 @@ jobs:
             const filePath = 'Dep.Tests/puppeteer/config_chrome_${{ matrix.config.platform }}.json';
             const config = JSON.parse(fs.readFileSync(filePath, 'utf8'));
             
-            config.testOptions.url = '${{ inputs.url }}' + 'example';
+            let standUrl = '';
+            const urlInput = '${{ inputs.url }}';
+            
+            if (urlInput === 'release') {
+              standUrl = '${{ secrets.URL_RELEASE }}';
+            } else if (urlInput === 'hotfix') {
+              standUrl = '${{ secrets.URL_HOTFIX }}';
+            } else if (urlInput === 'develop') {
+              standUrl = '${{ secrets.URL_DEVELOP }}';
+            } else {
+              standUrl = urlInput;
+            }
+            
+            config.testOptions.url = standUrl + 'example';
             
             fs.writeFileSync(filePath, JSON.stringify(config, null, 2));
           "

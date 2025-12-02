@@ -14,16 +14,13 @@ on:
         - hotfix
         - develop
 
-env:
-  SELECTED_URL: ${{ github.event.inputs.url == 'release' && secrets.URL_RELEASE || github.event.inputs.url == 'hotfix' && secrets.URL_HOTFIX || secrets.URL_DEVELOP }}
-
 jobs:
   puppeteer-docserver:
     uses: ./.github/workflows/puppeteer-tests-actions.yaml
     with:
       provider: 'example'
       suite: 'default'
-      url: ${{ env.SELECTED_URL }}
+      url: ${{ github.event.inputs.url }}
       launch_name: 'Github Action All Tests'
     secrets:
       READ_PAT: ${{ secrets.READ_PAT }}
