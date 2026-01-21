@@ -1,0 +1,34 @@
+name: Puppeteer Hourly Tests
+
+on:
+  workflow_dispatch:
+  # schedule:
+  #   - cron: "0 * * * *"
+
+jobs:
+  test-docspace-eu:
+    uses: ./.github/workflows/puppeteer-tests-actions.yaml
+    with:
+      provider: "docspaceEU"
+      suite: "hourly"
+      launch_name: "Hourly Tests - docspaceEU"
+      project_name: "docsserver"
+    secrets:
+      READ_PAT: ${{ secrets.READ_PAT }}
+      REPORT_KEY: ${{ secrets.REPORT_KEY }}
+      TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+      TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
+
+  test-docspace-us:
+    needs: test-docspace-eu
+    uses: ./.github/workflows/puppeteer-tests-actions.yaml
+    with:
+      provider: "docspaceUS"
+      suite: "hourly"
+      launch_name: "Hourly Tests - docspaceUS"
+      project_name: "docsserver"
+    secrets:
+      READ_PAT: ${{ secrets.READ_PAT }}
+      REPORT_KEY: ${{ secrets.REPORT_KEY }}
+      TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+      TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
