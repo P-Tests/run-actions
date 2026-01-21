@@ -22,6 +22,11 @@ on:
         required: false
         type: string
         default: 'Github Action Tests'
+      project_name:
+        description: 'Report Portal project name'
+        required: false
+        type: string
+        default: 'docsserver'
     secrets:
       READ_PAT:
         required: true
@@ -117,7 +122,7 @@ jobs:
             const config = JSON.parse(fs.readFileSync(filePath, 'utf8'));
             
             config.api_key = '${{ secrets.REPORT_KEY }}';
-            config.project_name = 'docsserver';
+            config.project_name = '${{ inputs.project_name }}';
             config.launch_name = '${{ inputs.launch_name }}';
             
             fs.writeFileSync(filePath, JSON.stringify(config, null, 2));
