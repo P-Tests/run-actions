@@ -2,8 +2,8 @@ name: Puppeteer Hourly Tests
 
 on:
   workflow_dispatch:
-  # schedule:
-  #   - cron: "0 * * * *"
+  schedule:
+    - cron: "0 * * * *"
 
 jobs:
   test-docspace-eu:
