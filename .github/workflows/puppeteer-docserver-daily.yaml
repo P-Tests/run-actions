@@ -1,24 +1,33 @@
-name: Puppeteer Suite Tests
+name: Puppeteer Daily Tests
 
 on:
+  schedule:
+    - cron: '0 20 * * *'
   workflow_dispatch:
-    inputs:
-      suite:
-        description: 'Test suite to run'
-        required: true
-        type: choice
-        options:
-          - daily
-          - default
-        default: daily
 
 jobs:
-  test-docspace:
+  test-docspaceEU:
     uses: ./.github/workflows/puppeteer-tests-actions.yaml
     with:
-      provider: 'docspace'
-      suite: ${{ github.event.inputs.suite }}
-      launch_name: ${{ github.event.inputs.suite == 'daily' && 'Github Action Daily Tests' || 'Github Action Default Tests' }}
+      provider: 'docspaceEU'
+      project_name: "docsserver-daily"
+      suite: 'daily'
+      launch_name: 'Github Action Daily Tests'
+      os: "all"
+    secrets:
+      READ_PAT: ${{ secrets.READ_PAT }}
+      REPORT_KEY: ${{ secrets.REPORT_KEY }}
+      TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+      TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
+
+  test-docspaceUS:
+    uses: ./.github/workflows/puppeteer-tests-actions.yaml
+    with:
+      provider: 'docspaceUS'
+      project_name: "docsserver-daily"
+      suite: 'daily'
+      launch_name: 'Github Action Daily Tests'
+      os: "all"
     secrets:
       READ_PAT: ${{ secrets.READ_PAT }}
       REPORT_KEY: ${{ secrets.REPORT_KEY }}
@@ -26,12 +35,14 @@ jobs:
       TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
 
   test-ncoc:
-    needs: test-docspace
+    needs: [test-docspaceEU, test-docspaceUS]
     uses: ./.github/workflows/puppeteer-tests-actions.yaml
     with:
       provider: 'ncoc'
-      suite: ${{ github.event.inputs.suite }}
-      launch_name: ${{ github.event.inputs.suite == 'daily' && 'Github Action Daily Tests' || 'Github Action Default Tests' }}
+      project_name: "docsserver-daily"
+      suite: 'daily'
+      launch_name: 'Github Action Daily Tests'
+      os: "all"
     secrets:
       READ_PAT: ${{ secrets.READ_PAT }}
       REPORT_KEY: ${{ secrets.REPORT_KEY }}
@@ -43,8 +54,10 @@ jobs:
     uses: ./.github/workflows/puppeteer-tests-actions.yaml
     with:
       provider: 'ocis'
-      suite: ${{ github.event.inputs.suite }}
-      launch_name: ${{ github.event.inputs.suite == 'daily' && 'Github Action Daily Tests' || 'Github Action Default Tests' }}
+      project_name: "docsserver-daily"
+      suite: 'daily'
+      launch_name: 'Github Action Daily Tests'
+      os: "all"
     secrets:
       READ_PAT: ${{ secrets.READ_PAT }}
       REPORT_KEY: ${{ secrets.REPORT_KEY }}
@@ -56,8 +69,10 @@ jobs:
     uses: ./.github/workflows/puppeteer-tests-actions.yaml
     with:
       provider: 'wopi'
-      suite: ${{ github.event.inputs.suite }}
-      launch_name: ${{ github.event.inputs.suite == 'daily' && 'Github Action Daily Tests' || 'Github Action Default Tests' }}
+      project_name: "docsserver-daily"
+      suite: 'daily'
+      launch_name: 'Github Action Daily Tests'
+      os: "all"
     secrets:
       READ_PAT: ${{ secrets.READ_PAT }}
       REPORT_KEY: ${{ secrets.REPORT_KEY }}
@@ -69,8 +84,10 @@ jobs:
     uses: ./.github/workflows/puppeteer-tests-actions.yaml
     with:
       provider: 'example'
-      suite: ${{ github.event.inputs.suite }}
-      launch_name: ${{ github.event.inputs.suite == 'daily' && 'Github Action Daily Tests' || 'Github Action Default Tests' }}
+      project_name: "docsserver-daily"
+      suite: 'daily'
+      launch_name: 'Github Action Daily Tests'
+      os: "all"
     secrets:
       READ_PAT: ${{ secrets.READ_PAT }}
       REPORT_KEY: ${{ secrets.REPORT_KEY }}

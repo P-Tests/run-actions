@@ -21,7 +21,6 @@ jobs:
       TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
 
   test-docspace-us:
-    needs: test-docspace-eu
     uses: ./.github/workflows/puppeteer-tests-actions.yaml
     with:
       provider: "docspaceUS"
