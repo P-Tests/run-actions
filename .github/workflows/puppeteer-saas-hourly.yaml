@@ -1,4 +1,4 @@
-name: Puppeteer Hourly Tests
+name: Puppeteer SaaS Hourly Tests
 
 on:
   workflow_dispatch:
