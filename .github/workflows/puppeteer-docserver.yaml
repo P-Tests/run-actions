@@ -22,6 +22,7 @@ jobs:
       suite: 'default'
       url: ${{ github.event.inputs.url }}
       launch_name: 'Github Action All Tests'
+      os: "all"
     secrets:
       READ_PAT: ${{ secrets.READ_PAT }}
       REPORT_KEY: ${{ secrets.REPORT_KEY }}

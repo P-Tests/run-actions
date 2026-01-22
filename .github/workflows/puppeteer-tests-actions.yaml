@@ -27,6 +27,11 @@ on:
         required: false
         type: string
         default: 'docsserver'
+      os:
+        description: 'Operating system to run tests on'
+        required: false
+        type: string
+        default: 'all'
     secrets:
       READ_PAT:
         required: true
@@ -44,19 +49,9 @@ on:
         required: false
 
 jobs:
-  puppeteer-test:
-    strategy:
-      fail-fast: false
-      matrix:
-        config:
-          - os: windows-latest
-            platform: win
-          - os: macos-latest
-            platform: mac
-          - os: ubuntu-latest
-            platform: linux
-    
-    runs-on: ${{ matrix.config.os }}
+  puppeteer-test-windows:
+    if: inputs.os == 'all' || inputs.os == 'windows'
+    runs-on: windows-latest
 
     steps:
       - name: Set up Python
@@ -93,12 +88,12 @@ jobs:
         run: |
           node -e "
             const fs = require('fs');
-            const filePath = 'Dep.Tests/puppeteer/config_chrome_${{ matrix.config.platform }}.json';
+            const filePath = 'Dep.Tests/puppeteer/config_chrome_win.json';
             const config = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-            
+
             let standUrl = '';
             const urlInput = '${{ inputs.url }}';
-            
+
             if (urlInput === 'release') {
               standUrl = '${{ secrets.URL_RELEASE }}';
             } else if (urlInput === 'hotfix') {
@@ -108,9 +103,9 @@ jobs:
             } else {
               standUrl = urlInput;
             }
-            
+
             config.testOptions.url = standUrl + 'example';
-            
+
             fs.writeFileSync(filePath, JSON.stringify(config, null, 2));
           "
 
@@ -128,16 +123,131 @@ jobs:
             fs.writeFileSync(filePath, JSON.stringify(config, null, 2));
           "
 
-      - name: Set headless mode for linux
-        if: matrix.config.os == 'ubuntu-latest'
+      - name: Install dependencies
+        run: |
+          cd Dep.Tests/puppeteer/engine
+          npm install
+      
+      - name: Run tests
+        run: |
+          cd Dep.Tests/puppeteer/engine
+          python run.py --suite ${{ inputs.suite }} --disable_animation --config_params puppeteerOptions.headless=true --providers ${{ inputs.provider }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: out - windows-latest - ${{ inputs.provider }}
+          path: |
+            Dep.Tests/puppeteer/out
+
+      - name: Send message to telegram
+        if: always()
+        shell: bash
+        env:
+          MESSAGE: |
+            Workflow: ${{ github.workflow }}
+            Provider: ${{ inputs.provider }}
+            OS: Windows
+            Github job: ${{ github.job }}
+            Github job status: ${{ job.status == 'success' && '\u2705' || job.status == 'failure' && '\u274C' || '\u2753' }} - ${{ job.status }}
+
+            [View Action Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            [View Job Details](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/job/${{ github.job }})
+        run: |
+          MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"chat_id\": \"${{ secrets.TELEGRAM_TO }}\",
+            \"text\": \"$MESSAGE\",
+            \"parse_mode\": \"Markdown\",
+            \"disable_notification\": true,
+            \"disable_web_page_preview\": true
+          }"
+
+  puppeteer-test-linux:
+    if: inputs.os == 'all' || inputs.os == 'linux'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Set up nodejs
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'latest'
+
+      - name: Checkout main repository Dep.Tests
+        uses: actions/checkout@v4
+        with:
+          repository: ONLYOFFICE-data/Dep.Tests
+          path: Dep.Tests
+          token: ${{ secrets.READ_PAT }}
+
+      - name: Setup Git
+        run: |
+          git config --global user.name 'GitHub Actions'
+          git config --global user.email 'actions@github.com'
+
+          git config --global url."https://${{ secrets.READ_PAT }}@github.com/".insteadOf "https://github.com/"
+
+      - name: Init specific submodule
+        run: |
+          cd Dep.Tests
+          git submodule update --init --depth 1 puppeteer/files
+
+      - name: Set stand url to config
+        if: inputs.url != ''
         run: |
           node -e "
             const fs = require('fs');
             const filePath = 'Dep.Tests/puppeteer/config_chrome_linux.json';
             const config = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-            
+
+            let standUrl = '';
+            const urlInput = '${{ inputs.url }}';
+
+            if (urlInput === 'release') {
+              standUrl = '${{ secrets.URL_RELEASE }}';
+            } else if (urlInput === 'hotfix') {
+              standUrl = '${{ secrets.URL_HOTFIX }}';
+            } else if (urlInput === 'develop') {
+              standUrl = '${{ secrets.URL_DEVELOP }}';
+            } else {
+              standUrl = urlInput;
+            }
+
+            config.testOptions.url = standUrl + 'example';
+
+            fs.writeFileSync(filePath, JSON.stringify(config, null, 2));
+          "
+
+      - name: Add reports key to config
+        run: |
+          node -e "
+            const fs = require('fs');
+            const filePath = 'Dep.Tests/tools/report_portal/config.json';
+            const config = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+
+            config.api_key = '${{ secrets.REPORT_KEY }}';
+            config.project_name = '${{ inputs.project_name }}';
+            config.launch_name = '${{ inputs.launch_name }}';
+
+            fs.writeFileSync(filePath, JSON.stringify(config, null, 2));
+          "
+
+      - name: Set headless mode for linux
+        run: |
+          node -e "
+            const fs = require('fs');
+            const filePath = 'Dep.Tests/puppeteer/config_chrome_linux.json';
+            const config = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+
             config.puppeteerOptions.headless = true;
-            
+
             fs.writeFileSync(filePath, JSON.stringify(config, null, 2));
           "
 
@@ -147,7 +257,6 @@ jobs:
           npm install
 
       - name: Configure Puppeteer sandbox
-        if: matrix.config.os == 'ubuntu-latest'
         run: |
           # Configure Puppeteer sandbox with https://pptr.dev/troubleshooting#issues-with-apparmor-on-ubuntu
           # cd to Puppeteer cache directory (adjust the path if using a different cache directory)
@@ -163,7 +272,7 @@ jobs:
           fi
           # export CHROME_DEVEL_SANDBOX env variable
           echo "CHROME_DEVEL_SANDBOX=/usr/local/sbin/chrome-devel-sandbox" >> $GITHUB_ENV
-      
+
       - name: Run tests
         run: |
           cd Dep.Tests/puppeteer/engine
@@ -172,7 +281,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: out - ${{ matrix.config.os }} - ${{ inputs.provider }}
+          name: out - ubuntu-latest - ${{ inputs.provider }}
           path: |
             Dep.Tests/puppeteer/out
 
@@ -183,9 +292,126 @@ jobs:
           MESSAGE: |
             Workflow: ${{ github.workflow }}
             Provider: ${{ inputs.provider }}
-            Github job: ${{ github.job }} - ${{ matrix.config.os }}
+            OS: Linux
+            Github job: ${{ github.job }}
             Github job status: ${{ job.status == 'success' && '\u2705' || job.status == 'failure' && '\u274C' || '\u2753' }} - ${{ job.status }}
-            
+
+            [View Action Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            [View Job Details](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/job/${{ github.job }})
+        run: |
+          MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"chat_id\": \"${{ secrets.TELEGRAM_TO }}\",
+            \"text\": \"$MESSAGE\",
+            \"parse_mode\": \"Markdown\",
+            \"disable_notification\": true,
+            \"disable_web_page_preview\": true
+          }"
+
+  puppeteer-test-macos:
+    if: inputs.os == 'all' || inputs.os == 'macos'
+    runs-on: macos-latest
+
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Set up nodejs
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'latest'
+
+      - name: Checkout main repository Dep.Tests
+        uses: actions/checkout@v4
+        with:
+          repository: ONLYOFFICE-data/Dep.Tests
+          path: Dep.Tests
+          token: ${{ secrets.READ_PAT }}
+
+      - name: Setup Git
+        run: |
+          git config --global user.name 'GitHub Actions'
+          git config --global user.email 'actions@github.com'
+
+          git config --global url."https://${{ secrets.READ_PAT }}@github.com/".insteadOf "https://github.com/"
+
+      - name: Init specific submodule
+        run: |
+          cd Dep.Tests
+          git submodule update --init --depth 1 puppeteer/files
+
+      - name: Set stand url to config
+        if: inputs.url != ''
+        run: |
+          node -e "
+            const fs = require('fs');
+            const filePath = 'Dep.Tests/puppeteer/config_chrome_mac.json';
+            const config = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+
+            let standUrl = '';
+            const urlInput = '${{ inputs.url }}';
+
+            if (urlInput === 'release') {
+              standUrl = '${{ secrets.URL_RELEASE }}';
+            } else if (urlInput === 'hotfix') {
+              standUrl = '${{ secrets.URL_HOTFIX }}';
+            } else if (urlInput === 'develop') {
+              standUrl = '${{ secrets.URL_DEVELOP }}';
+            } else {
+              standUrl = urlInput;
+            }
+
+            config.testOptions.url = standUrl + 'example';
+
+            fs.writeFileSync(filePath, JSON.stringify(config, null, 2));
+          "
+
+      - name: Add reports key to config
+        run: |
+          node -e "
+            const fs = require('fs');
+            const filePath = 'Dep.Tests/tools/report_portal/config.json';
+            const config = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+
+            config.api_key = '${{ secrets.REPORT_KEY }}';
+            config.project_name = '${{ inputs.project_name }}';
+            config.launch_name = '${{ inputs.launch_name }}';
+
+            fs.writeFileSync(filePath, JSON.stringify(config, null, 2));
+          "
+
+      - name: Install dependencies
+        run: |
+          cd Dep.Tests/puppeteer/engine
+          npm install
+
+      - name: Run tests
+        run: |
+          cd Dep.Tests/puppeteer/engine
+          python run.py --suite ${{ inputs.suite }} --disable_animation --config_params puppeteerOptions.headless=true --providers ${{ inputs.provider }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: out - macos-latest - ${{ inputs.provider }}
+          path: |
+            Dep.Tests/puppeteer/out
+
+      - name: Send message to telegram
+        if: always()
+        shell: bash
+        env:
+          MESSAGE: |
+            Workflow: ${{ github.workflow }}
+            Provider: ${{ inputs.provider }}
+            OS: macOS
+            Github job: ${{ github.job }}
+            Github job status: ${{ job.status == 'success' && '\u2705' || job.status == 'failure' && '\u274C' || '\u2753' }} - ${{ job.status }}
+
             [View Action Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
             [View Job Details](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/job/${{ github.job }})
         run: |

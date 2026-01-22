@@ -13,6 +13,7 @@ jobs:
       suite: "hourly"
       launch_name: "Hourly Tests - docspaceEU"
       project_name: "docspace-saas"
+      os: "windows"
     secrets:
       READ_PAT: ${{ secrets.READ_PAT }}
       REPORT_KEY: ${{ secrets.REPORT_KEY }}
@@ -27,6 +28,7 @@ jobs:
       suite: "hourly"
       launch_name: "Hourly Tests - docspaceUS"
       project_name: "docspace-saas"
+      os: "windows"
     secrets:
       READ_PAT: ${{ secrets.READ_PAT }}
       REPORT_KEY: ${{ secrets.REPORT_KEY }}
