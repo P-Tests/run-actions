@@ -1,0 +1,220 @@
+name: 'Puppeteer Test Runner'
+description: 'Run Puppeteer tests on different operating systems'
+
+inputs:
+  provider:
+    description: 'Provider to test'
+    required: true
+  suite:
+    description: 'Test suite to run'
+    required: false
+    default: 'default'
+  url:
+    description: 'Stand URL to test'
+    required: false
+    default: ''
+  launch_name:
+    description: 'Report Portal launch name'
+    required: false
+    default: 'Github Action Tests'
+  project_name:
+    description: 'Report Portal project name'
+    required: false
+    default: 'docsserver'
+  os_name:
+    description: 'Operating system name (windows, linux, macos)'
+    required: true
+  read_pat:
+    description: 'GitHub PAT for private repository access'
+    required: true
+  report_key:
+    description: 'Report Portal API key'
+    required: true
+  telegram_token:
+    description: 'Telegram bot token'
+    required: true
+  telegram_to:
+    description: 'Telegram chat ID'
+    required: true
+  url_release:
+    description: 'Release environment URL'
+    required: false
+    default: ''
+  url_hotfix:
+    description: 'Hotfix environment URL'
+    required: false
+    default: ''
+  url_develop:
+    description: 'Develop environment URL'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Set up nodejs
+      uses: actions/setup-node@v4
+      with:
+        node-version: 'latest'
+
+    - name: Checkout main repository Dep.Tests
+      uses: actions/checkout@v4
+      with:
+        repository: ONLYOFFICE-data/Dep.Tests
+        path: Dep.Tests
+        token: ${{ inputs.read_pat }}
+
+    - name: Setup Git
+      shell: bash
+      run: |
+        git config --global user.name 'GitHub Actions'
+        git config --global user.email 'actions@github.com'
+        git config --global url."https://${{ inputs.read_pat }}@github.com/".insteadOf "https://github.com/"
+
+    - name: Init specific submodule
+      shell: bash
+      run: |
+        cd Dep.Tests
+        git submodule update --init --depth 1 puppeteer/files
+
+    - name: Determine config file path
+      shell: bash
+      run: |
+        if [[ "${{ inputs.os_name }}" == "windows" ]]; then
+          echo "CONFIG_FILE=Dep.Tests/puppeteer/config_chrome_win.json" >> $GITHUB_ENV
+        elif [[ "${{ inputs.os_name }}" == "linux" ]]; then
+          echo "CONFIG_FILE=Dep.Tests/puppeteer/config_chrome_linux.json" >> $GITHUB_ENV
+        elif [[ "${{ inputs.os_name }}" == "macos" ]]; then
+          echo "CONFIG_FILE=Dep.Tests/puppeteer/config_chrome_mac.json" >> $GITHUB_ENV
+        fi
+
+    - name: Set stand url to config
+      if: inputs.url != ''
+      shell: bash
+      run: |
+        node -e "
+          const fs = require('fs');
+          const filePath = '${{ env.CONFIG_FILE }}';
+          const config = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+
+          let standUrl = '';
+          const urlInput = '${{ inputs.url }}';
+
+          if (urlInput === 'release') {
+            standUrl = '${{ inputs.url_release }}';
+          } else if (urlInput === 'hotfix') {
+            standUrl = '${{ inputs.url_hotfix }}';
+          } else if (urlInput === 'develop') {
+            standUrl = '${{ inputs.url_develop }}';
+          } else {
+            standUrl = urlInput;
+          }
+
+          config.testOptions.url = standUrl + 'example';
+
+          fs.writeFileSync(filePath, JSON.stringify(config, null, 2));
+        "
+
+    - name: Add reports key to config
+      shell: bash
+      run: |
+        node -e "
+          const fs = require('fs');
+          const filePath = 'Dep.Tests/tools/report_portal/config.json';
+          const config = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+
+          config.api_key = '${{ inputs.report_key }}';
+          config.project_name = '${{ inputs.project_name }}';
+          config.launch_name = '${{ inputs.launch_name }}';
+
+          fs.writeFileSync(filePath, JSON.stringify(config, null, 2));
+        "
+
+    - name: Set headless mode for linux
+      if: inputs.os_name == 'linux'
+      shell: bash
+      run: |
+        node -e "
+          const fs = require('fs');
+          const filePath = 'Dep.Tests/puppeteer/config_chrome_linux.json';
+          const config = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+
+          config.puppeteerOptions.headless = true;
+
+          fs.writeFileSync(filePath, JSON.stringify(config, null, 2));
+        "
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        cd Dep.Tests/puppeteer/engine
+        npm install
+
+    - name: Configure Puppeteer sandbox (Linux only)
+      if: inputs.os_name == 'linux'
+      shell: bash
+      run: |
+        # Configure Puppeteer sandbox with https://pptr.dev/troubleshooting#issues-with-apparmor-on-ubuntu
+        CHROME_VERSION=$(ls ~/.cache/puppeteer/chrome/linux-* -d 2>/dev/null | head -n 1 | xargs basename 2>/dev/null || echo "")
+        if [ -z "$CHROME_VERSION" ]; then
+          echo "Chrome not installed yet, will be configured after npm install"
+        else
+          cd ~/.cache/puppeteer/chrome/$CHROME_VERSION/chrome-linux64/
+          sudo chown root:root chrome_sandbox
+          sudo chmod 4755 chrome_sandbox
+          sudo cp -p chrome_sandbox /usr/local/sbin/chrome-devel-sandbox
+        fi
+        echo "CHROME_DEVEL_SANDBOX=/usr/local/sbin/chrome-devel-sandbox" >> $GITHUB_ENV
+
+    - name: Run tests
+      shell: bash
+      run: |
+        cd Dep.Tests/puppeteer/engine
+        python run.py --suite ${{ inputs.suite }} --disable_animation --config_params puppeteerOptions.headless=true --providers ${{ inputs.provider }}
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: out-${{ inputs.os_name }}-${{ inputs.provider }}
+        path: Dep.Tests/puppeteer/out
+
+    - name: Determine OS display name
+      shell: bash
+      run: |
+        if [[ "${{ inputs.os_name }}" == "windows" ]]; then
+          echo "OS_DISPLAY=Windows" >> $GITHUB_ENV
+        elif [[ "${{ inputs.os_name }}" == "linux" ]]; then
+          echo "OS_DISPLAY=Linux" >> $GITHUB_ENV
+        elif [[ "${{ inputs.os_name }}" == "macos" ]]; then
+          echo "OS_DISPLAY=macOS" >> $GITHUB_ENV
+        fi
+
+    - name: Send message to telegram
+      if: always()
+      shell: bash
+      env:
+        MESSAGE: |
+          Workflow: ${{ github.workflow }}
+          Provider: ${{ inputs.provider }}
+          OS: ${{ env.OS_DISPLAY }}
+          Github job: ${{ github.job }}
+          Github job status: ${{ job.status == 'success' && '✅' || job.status == 'failure' && '❌' || '❓' }} - ${{ job.status }}
+
+          [View Action Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          [View Job Details](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/job/${{ github.job }})
+      run: |
+        MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')
+        curl -s -X POST "https://api.telegram.org/bot${{ inputs.telegram_token }}/sendMessage" \
+        -H "Content-Type: application/json" \
+        -d "{
+          \"chat_id\": \"${{ inputs.telegram_to }}\",
+          \"text\": \"$MESSAGE\",
+          \"parse_mode\": \"Markdown\",
+          \"disable_notification\": true,
+          \"disable_web_page_preview\": true
+        }"

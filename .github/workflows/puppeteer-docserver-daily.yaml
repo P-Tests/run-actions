@@ -7,89 +7,185 @@ on:
 
 jobs:
   test-docspaceEU:
-    uses: ./.github/workflows/puppeteer-tests-actions.yaml
-    with:
-      provider: 'docspaceEU'
-      project_name: "docsserver-daily"
-      suite: 'daily'
-      launch_name: 'Github Action Daily Tests'
-      os: "all"
-    secrets:
-      READ_PAT: ${{ secrets.READ_PAT }}
-      REPORT_KEY: ${{ secrets.REPORT_KEY }}
-      TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-      TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      matrix:
+        os:
+          - name: windows
+            runner: windows-latest
+          - name: linux
+            runner: ubuntu-latest
+          - name: macos
+            runner: macos-latest
+      fail-fast: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Puppeteer Tests
+        uses: ./.github/actions/puppeteer-test
+        with:
+          provider: 'docspaceEU'
+          project_name: "docsserver-daily"
+          suite: 'daily'
+          launch_name: 'Github Action Daily Tests'
+          os_name: ${{ matrix.os.name }}
+          read_pat: ${{ secrets.READ_PAT }}
+          report_key: ${{ secrets.REPORT_KEY }}
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_TO }}
 
   test-docspaceUS:
-    uses: ./.github/workflows/puppeteer-tests-actions.yaml
-    with:
-      provider: 'docspaceUS'
-      project_name: "docsserver-daily"
-      suite: 'daily'
-      launch_name: 'Github Action Daily Tests'
-      os: "all"
-    secrets:
-      READ_PAT: ${{ secrets.READ_PAT }}
-      REPORT_KEY: ${{ secrets.REPORT_KEY }}
-      TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-      TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      matrix:
+        os:
+          - name: windows
+            runner: windows-latest
+          - name: linux
+            runner: ubuntu-latest
+          - name: macos
+            runner: macos-latest
+      fail-fast: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Puppeteer Tests
+        uses: ./.github/actions/puppeteer-test
+        with:
+          provider: 'docspaceUS'
+          project_name: "docsserver-daily"
+          suite: 'daily'
+          launch_name: 'Github Action Daily Tests'
+          os_name: ${{ matrix.os.name }}
+          read_pat: ${{ secrets.READ_PAT }}
+          report_key: ${{ secrets.REPORT_KEY }}
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_TO }}
 
   test-ncoc:
     needs: [test-docspaceEU, test-docspaceUS]
-    uses: ./.github/workflows/puppeteer-tests-actions.yaml
-    with:
-      provider: 'ncoc'
-      project_name: "docsserver-daily"
-      suite: 'daily'
-      launch_name: 'Github Action Daily Tests'
-      os: "all"
-    secrets:
-      READ_PAT: ${{ secrets.READ_PAT }}
-      REPORT_KEY: ${{ secrets.REPORT_KEY }}
-      TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-      TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      matrix:
+        os:
+          - name: windows
+            runner: windows-latest
+          - name: linux
+            runner: ubuntu-latest
+          - name: macos
+            runner: macos-latest
+      fail-fast: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Puppeteer Tests
+        uses: ./.github/actions/puppeteer-test
+        with:
+          provider: 'ncoc'
+          project_name: "docsserver-daily"
+          suite: 'daily'
+          launch_name: 'Github Action Daily Tests'
+          os_name: ${{ matrix.os.name }}
+          read_pat: ${{ secrets.READ_PAT }}
+          report_key: ${{ secrets.REPORT_KEY }}
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_TO }}
 
   test-ocis:
     needs: test-ncoc
-    uses: ./.github/workflows/puppeteer-tests-actions.yaml
-    with:
-      provider: 'ocis'
-      project_name: "docsserver-daily"
-      suite: 'daily'
-      launch_name: 'Github Action Daily Tests'
-      os: "all"
-    secrets:
-      READ_PAT: ${{ secrets.READ_PAT }}
-      REPORT_KEY: ${{ secrets.REPORT_KEY }}
-      TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-      TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      matrix:
+        os:
+          - name: windows
+            runner: windows-latest
+          - name: linux
+            runner: ubuntu-latest
+          - name: macos
+            runner: macos-latest
+      fail-fast: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Puppeteer Tests
+        uses: ./.github/actions/puppeteer-test
+        with:
+          provider: 'ocis'
+          project_name: "docsserver-daily"
+          suite: 'daily'
+          launch_name: 'Github Action Daily Tests'
+          os_name: ${{ matrix.os.name }}
+          read_pat: ${{ secrets.READ_PAT }}
+          report_key: ${{ secrets.REPORT_KEY }}
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_TO }}
 
   test-wopi:
     needs: test-ocis
-    uses: ./.github/workflows/puppeteer-tests-actions.yaml
-    with:
-      provider: 'wopi'
-      project_name: "docsserver-daily"
-      suite: 'daily'
-      launch_name: 'Github Action Daily Tests'
-      os: "all"
-    secrets:
-      READ_PAT: ${{ secrets.READ_PAT }}
-      REPORT_KEY: ${{ secrets.REPORT_KEY }}
-      TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-      TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      matrix:
+        os:
+          - name: windows
+            runner: windows-latest
+          - name: linux
+            runner: ubuntu-latest
+          - name: macos
+            runner: macos-latest
+      fail-fast: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Puppeteer Tests
+        uses: ./.github/actions/puppeteer-test
+        with:
+          provider: 'wopi'
+          project_name: "docsserver-daily"
+          suite: 'daily'
+          launch_name: 'Github Action Daily Tests'
+          os_name: ${{ matrix.os.name }}
+          read_pat: ${{ secrets.READ_PAT }}
+          report_key: ${{ secrets.REPORT_KEY }}
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_TO }}
 
   test-example:
     needs: test-wopi
-    uses: ./.github/workflows/puppeteer-tests-actions.yaml
-    with:
-      provider: 'example'
-      project_name: "docsserver-daily"
-      suite: 'daily'
-      launch_name: 'Github Action Daily Tests'
-      os: "all"
-    secrets:
-      READ_PAT: ${{ secrets.READ_PAT }}
-      REPORT_KEY: ${{ secrets.REPORT_KEY }}
-      TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-      TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      matrix:
+        os:
+          - name: windows
+            runner: windows-latest
+          - name: linux
+            runner: ubuntu-latest
+          - name: macos
+            runner: macos-latest
+      fail-fast: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Puppeteer Tests
+        uses: ./.github/actions/puppeteer-test
+        with:
+          provider: 'example'
+          project_name: "docsserver-daily"
+          suite: 'daily'
+          launch_name: 'Github Action Daily Tests'
+          os_name: ${{ matrix.os.name }}
+          read_pat: ${{ secrets.READ_PAT }}
+          report_key: ${{ secrets.REPORT_KEY }}
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_TO }}

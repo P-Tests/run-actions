@@ -16,19 +16,35 @@ on:
 
 jobs:
   puppeteer-docserver:
-    uses: ./.github/workflows/puppeteer-tests-actions.yaml
-    with:
-      provider: 'example'
-      project_name: "docsserver"
-      suite: 'default'
-      url: ${{ github.event.inputs.url }}
-      launch_name: 'Github Action All Tests'
-      os: "all"
-    secrets:
-      READ_PAT: ${{ secrets.READ_PAT }}
-      REPORT_KEY: ${{ secrets.REPORT_KEY }}
-      TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-      TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
-      URL_RELEASE: ${{ secrets.URL_RELEASE }}
-      URL_HOTFIX: ${{ secrets.URL_HOTFIX }}
-      URL_DEVELOP: ${{ secrets.URL_DEVELOP }}
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      matrix:
+        os:
+          - name: windows
+            runner: windows-latest
+          - name: linux
+            runner: ubuntu-latest
+          - name: macos
+            runner: macos-latest
+      fail-fast: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Puppeteer Tests
+        uses: ./.github/actions/puppeteer-test
+        with:
+          provider: 'example'
+          project_name: "docsserver"
+          suite: 'default'
+          url: ${{ github.event.inputs.url }}
+          launch_name: 'Github Action All Tests'
+          os_name: ${{ matrix.os.name }}
+          read_pat: ${{ secrets.READ_PAT }}
+          report_key: ${{ secrets.REPORT_KEY }}
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_TO }}
+          url_release: ${{ secrets.URL_RELEASE }}
+          url_hotfix: ${{ secrets.URL_HOTFIX }}
+          url_develop: ${{ secrets.URL_DEVELOP }}
