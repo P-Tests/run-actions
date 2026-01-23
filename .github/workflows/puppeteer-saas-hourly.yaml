@@ -7,29 +7,39 @@ on:
 
 jobs:
   test-docspace-eu:
-    uses: ./.github/workflows/puppeteer-tests-actions.yaml
-    with:
-      provider: "docspaceEU"
-      suite: "hourly"
-      launch_name: "Hourly Tests - docspaceEU"
-      project_name: "docspace-saas"
-      os: "windows"
-    secrets:
-      READ_PAT: ${{ secrets.READ_PAT }}
-      REPORT_KEY: ${{ secrets.REPORT_KEY }}
-      TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-      TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Puppeteer Tests
+        uses: ./.github/actions/puppeteer-test
+        with:
+          provider: "docspaceEU"
+          suite: "hourly"
+          launch_name: "Hourly Tests - docspaceEU"
+          project_name: "docspace-saas"
+          os_name: "windows"
+          read_pat: ${{ secrets.READ_PAT }}
+          report_key: ${{ secrets.REPORT_KEY }}
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_TO }}
 
   test-docspace-us:
-    uses: ./.github/workflows/puppeteer-tests-actions.yaml
-    with:
-      provider: "docspaceUS"
-      suite: "hourly"
-      launch_name: "Hourly Tests - docspaceUS"
-      project_name: "docspace-saas"
-      os: "windows"
-    secrets:
-      READ_PAT: ${{ secrets.READ_PAT }}
-      REPORT_KEY: ${{ secrets.REPORT_KEY }}
-      TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-      TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Puppeteer Tests
+        uses: ./.github/actions/puppeteer-test
+        with:
+          provider: "docspaceUS"
+          suite: "hourly"
+          launch_name: "Hourly Tests - docspaceUS"
+          project_name: "docspace-saas"
+          os_name: "windows"
+          read_pat: ${{ secrets.READ_PAT }}
+          report_key: ${{ secrets.REPORT_KEY }}
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_TO }}
