@@ -208,7 +208,7 @@ runs:
           Provider: ${{ inputs.provider }}
           OS: ${{ env.OS_DISPLAY }}
           Github job: ${{ github.job }}
-          Github job status: ${{ job.status == 'success' && '✅' || job.status == 'failure' && '❌' || '❓' }} - ${{ job.status }}
+          Github job status: ${{ job.status == 'success' && '\u2705' || job.status == 'failure' && '\u274C' || '\u2753' }} - ${{ job.status }}
 
           [View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
           [View Job Details](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/job/${{ steps.job-id.outputs.job-id }})
