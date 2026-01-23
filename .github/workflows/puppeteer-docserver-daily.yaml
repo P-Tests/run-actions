@@ -33,8 +33,16 @@ jobs:
           os_name: ${{ matrix.os.name }}
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ secrets.REPORT_KEY }}
+
+      - name: Send message to Telegram
+        if: always()
+        uses: ./.github/actions/telegram-notify
+        with:
           telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
           telegram_to: ${{ secrets.TELEGRAM_TO }}
+          os_name: ${{ matrix.os.name }}
+          provider: 'docspaceEU'
+          job_status: ${{ job.status }}
 
   test-docspaceUS:
     runs-on: ${{ matrix.os.runner }}
@@ -63,8 +71,16 @@ jobs:
           os_name: ${{ matrix.os.name }}
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ secrets.REPORT_KEY }}
+
+      - name: Send message to Telegram
+        if: always()
+        uses: ./.github/actions/telegram-notify
+        with:
           telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
           telegram_to: ${{ secrets.TELEGRAM_TO }}
+          os_name: ${{ matrix.os.name }}
+          provider: 'docspaceUS'
+          job_status: ${{ job.status }}
 
   test-ncoc:
     needs: [test-docspaceEU, test-docspaceUS]
@@ -94,8 +110,16 @@ jobs:
           os_name: ${{ matrix.os.name }}
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ secrets.REPORT_KEY }}
+
+      - name: Send message to Telegram
+        if: always()
+        uses: ./.github/actions/telegram-notify
+        with:
           telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
           telegram_to: ${{ secrets.TELEGRAM_TO }}
+          os_name: ${{ matrix.os.name }}
+          provider: 'ncoc'
+          job_status: ${{ job.status }}
 
   test-ocis:
     needs: test-ncoc
@@ -125,8 +149,16 @@ jobs:
           os_name: ${{ matrix.os.name }}
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ secrets.REPORT_KEY }}
+
+      - name: Send message to Telegram
+        if: always()
+        uses: ./.github/actions/telegram-notify
+        with:
           telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
           telegram_to: ${{ secrets.TELEGRAM_TO }}
+          os_name: ${{ matrix.os.name }}
+          provider: 'ocis'
+          job_status: ${{ job.status }}
 
   test-wopi:
     needs: test-ocis
@@ -156,8 +188,16 @@ jobs:
           os_name: ${{ matrix.os.name }}
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ secrets.REPORT_KEY }}
+
+      - name: Send message to Telegram
+        if: always()
+        uses: ./.github/actions/telegram-notify
+        with:
           telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
           telegram_to: ${{ secrets.TELEGRAM_TO }}
+          os_name: ${{ matrix.os.name }}
+          provider: 'wopi'
+          job_status: ${{ job.status }}
 
   test-example:
     needs: test-wopi
@@ -187,5 +227,13 @@ jobs:
           os_name: ${{ matrix.os.name }}
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ secrets.REPORT_KEY }}
+
+      - name: Send message to Telegram
+        if: always()
+        uses: ./.github/actions/telegram-notify
+        with:
           telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
           telegram_to: ${{ secrets.TELEGRAM_TO }}
+          os_name: ${{ matrix.os.name }}
+          provider: 'example'
+          job_status: ${{ job.status }}

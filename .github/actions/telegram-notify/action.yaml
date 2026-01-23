@@ -1,0 +1,82 @@
+name: 'Telegram Notify'
+description: 'Send notification message to Telegram'
+
+inputs:
+  telegram_token:
+    description: 'Telegram bot token'
+    required: true
+  telegram_to:
+    description: 'Telegram chat ID'
+    required: true
+  os_name:
+    description: 'Operating system name (windows, linux, macos)'
+    required: true
+  provider:
+    description: 'Provider being tested'
+    required: true
+  job_status:
+    description: 'Job status (from job.status context)'
+    required: true
+  parse_mode:
+    description: 'Parse mode for message formatting'
+    required: false
+    default: 'Markdown'
+  disable_notification:
+    description: 'Disable notification sound'
+    required: false
+    default: 'true'
+  disable_web_page_preview:
+    description: 'Disable web page preview'
+    required: false
+    default: 'true'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Determine OS display name
+      shell: bash
+      run: |
+        if [[ "${{ inputs.os_name }}" == "windows" ]]; then
+          echo "OS_DISPLAY=Windows" >> $GITHUB_ENV
+        elif [[ "${{ inputs.os_name }}" == "linux" ]]; then
+          echo "OS_DISPLAY=Linux" >> $GITHUB_ENV
+        elif [[ "${{ inputs.os_name }}" == "macos" ]]; then
+          echo "OS_DISPLAY=macOS" >> $GITHUB_ENV
+        fi
+
+    - name: Get Job ID
+      id: job-id
+      uses: austenstone/job-id@v1
+
+    - name: Send message to Telegram
+      shell: bash
+      run: |
+        if [[ "${{ inputs.job_status }}" == "success" ]]; then
+          STATUS_EMOJI="\u2705"
+        elif [[ "${{ inputs.job_status }}" == "failure" ]]; then
+          STATUS_EMOJI="\u274C"
+        elif [[ "${{ inputs.job_status }}" == "cancelled" ]]; then
+          STATUS_EMOJI="\u1F6AB"
+        else
+          STATUS_EMOJI="\u2753"
+        fi
+
+        MESSAGE="Workflow: ${{ github.workflow }}
+        Provider: ${{ inputs.provider }}
+        OS: ${{ env.OS_DISPLAY }}
+        Github job: ${{ github.job }}
+        Github job status: ${STATUS_EMOJI} - ${{ inputs.job_status }}
+
+        [View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+        [View Job Details](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/job/${{ steps.job-id.outputs.job-id }})"
+
+        MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')
+        curl -s -X POST "https://api.telegram.org/bot${{ inputs.telegram_token }}/sendMessage" \
+        -H "Content-Type: application/json" \
+        -d "{
+          \"chat_id\": \"${{ inputs.telegram_to }}\",
+          \"text\": \"$MESSAGE\",
+          \"parse_mode\": \"${{ inputs.parse_mode }}\",
+          \"disable_notification\": ${{ inputs.disable_notification }},
+          \"disable_web_page_preview\": ${{ inputs.disable_web_page_preview }}
+        }"

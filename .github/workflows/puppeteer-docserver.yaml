@@ -43,8 +43,16 @@ jobs:
           os_name: ${{ matrix.os.name }}
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ secrets.REPORT_KEY }}
-          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
-          telegram_to: ${{ secrets.TELEGRAM_TO }}
           url_release: ${{ secrets.URL_RELEASE }}
           url_hotfix: ${{ secrets.URL_HOTFIX }}
           url_develop: ${{ secrets.URL_DEVELOP }}
+
+      - name: Send message to Telegram
+        if: always()
+        uses: ./.github/actions/telegram-notify
+        with:
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_TO }}
+          os_name: ${{ matrix.os.name }}
+          provider: 'example'
+          job_status: ${{ job.status }}

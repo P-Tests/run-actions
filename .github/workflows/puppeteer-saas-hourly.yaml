@@ -22,8 +22,16 @@ jobs:
           os_name: "windows"
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ secrets.REPORT_KEY }}
+
+      - name: Send message to Telegram
+        if: always()
+        uses: ./.github/actions/telegram-notify
+        with:
           telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
           telegram_to: ${{ secrets.TELEGRAM_TO }}
+          os_name: 'windows'
+          provider: 'docspaceEU'
+          job_status: ${{ job.status }}
 
   test-docspace-us:
     runs-on: windows-latest
@@ -41,5 +49,13 @@ jobs:
           os_name: "windows"
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ secrets.REPORT_KEY }}
+
+      - name: Send message to Telegram
+        if: always()
+        uses: ./.github/actions/telegram-notify
+        with:
           telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
           telegram_to: ${{ secrets.TELEGRAM_TO }}
+          os_name: 'windows'
+          provider: 'docspaceUS'
+          job_status: ${{ job.status }}
