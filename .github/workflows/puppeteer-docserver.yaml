@@ -13,12 +13,94 @@ on:
         - release
         - hotfix
         - develop
+      chunk_size:
+        description: 'Number of tests per chunk'
+        required: false
+        default: '1000'
+        type: string
 
 jobs:
-  puppeteer-docserver:
+  prepare:
+    name: Prepare Test Matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      num_chunks: ${{ steps.set-matrix.outputs.num_chunks }}
+      chunk_size: ${{ steps.set-matrix.outputs.chunk_size }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Set up nodejs
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'latest'
+
+      - name: Checkout main repository Dep.Tests
+        uses: actions/checkout@v4
+        with:
+          repository: ONLYOFFICE-data/Dep.Tests
+          path: Dep.Tests
+          token: ${{ secrets.READ_PAT }}
+
+      - name: Setup Git
+        shell: bash
+        run: |
+          git config --global user.name 'GitHub Actions'
+          git config --global user.email 'actions@github.com'
+          git config --global url."https://${{ secrets.READ_PAT }}@github.com/".insteadOf "https://github.com/"
+
+      - name: Init specific submodule
+        shell: bash
+        run: |
+          cd Dep.Tests
+          git submodule update --init --depth 1 puppeteer/files
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          cd Dep.Tests/puppeteer/engine
+          npm install
+
+      - name: Count tests and generate matrix
+        id: set-matrix
+        shell: bash
+        run: |
+          cd Dep.Tests/puppeteer/engine
+
+          CHUNK_SIZE="${{ github.event.inputs.chunk_size || '1000' }}"
+
+          # Run count-tests command (using linux config as reference)
+          OUTPUT=$(python run.py --providers example --count-tests --chunk-size $CHUNK_SIZE)
+
+          echo "Count tests output:"
+          echo "$OUTPUT"
+
+          # Parse output
+          NUM_CHUNKS=$(echo "$OUTPUT" | grep "num_chunks=" | cut -d'=' -f2)
+          MATRIX=$(echo "$OUTPUT" | grep "matrix=" | cut -d'=' -f2-)
+
+          echo "num_chunks=$NUM_CHUNKS" >> $GITHUB_OUTPUT
+          echo "chunk_size=$CHUNK_SIZE" >> $GITHUB_OUTPUT
+          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+
+          echo "Number of chunks: $NUM_CHUNKS"
+          echo "Chunk size: $CHUNK_SIZE"
+          echo "Matrix: $MATRIX"
+
+  run-tests:
+    name: Run Tests - ${{ matrix.os.name }} - Chunk ${{ matrix.chunk }}
+    needs: prepare
     runs-on: ${{ matrix.os.runner }}
     strategy:
       matrix:
+        chunk: ${{ fromJson(needs.prepare.outputs.matrix).chunk }}
         os:
           - name: windows
             runner: windows-latest
@@ -32,27 +114,150 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Run Puppeteer Tests
-        uses: ./.github/actions/puppeteer-test
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          provider: 'example'
-          project_name: "docsserver"
-          suite: 'default'
-          url: ${{ github.event.inputs.url }}
-          launch_name: 'Github Action All Tests'
-          os_name: ${{ matrix.os.name }}
-          read_pat: ${{ secrets.READ_PAT }}
-          report_key: ${{ secrets.REPORT_KEY }}
-          url_release: ${{ secrets.URL_RELEASE }}
-          url_hotfix: ${{ secrets.URL_HOTFIX }}
-          url_develop: ${{ secrets.URL_DEVELOP }}
+          python-version: '3.10'
 
-      - name: Send message to Telegram
-        if: always()
-        uses: ./.github/actions/telegram-notify
+      - name: Set up nodejs
+        uses: actions/setup-node@v4
         with:
-          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
-          telegram_to: ${{ secrets.TELEGRAM_TO }}
-          os_name: ${{ matrix.os.name }}
-          provider: 'example'
-          job_status: ${{ job.status }}
+          node-version: 'latest'
+
+      - name: Checkout main repository Dep.Tests
+        uses: actions/checkout@v4
+        with:
+          repository: ONLYOFFICE-data/Dep.Tests
+          path: Dep.Tests
+          token: ${{ secrets.READ_PAT }}
+
+      - name: Setup Git
+        shell: bash
+        run: |
+          git config --global user.name 'GitHub Actions'
+          git config --global user.email 'actions@github.com'
+          git config --global url."https://${{ secrets.READ_PAT }}@github.com/".insteadOf "https://github.com/"
+
+      - name: Init specific submodule
+        shell: bash
+        run: |
+          cd Dep.Tests
+          git submodule update --init --depth 1 puppeteer/files
+
+      - name: Determine config file path
+        shell: bash
+        run: |
+          if [[ "${{ matrix.os.name }}" == "windows" ]]; then
+            echo "CONFIG_FILE=Dep.Tests/puppeteer/config_chrome_win.json" >> $GITHUB_ENV
+          elif [[ "${{ matrix.os.name }}" == "linux" ]]; then
+            echo "CONFIG_FILE=Dep.Tests/puppeteer/config_chrome_linux.json" >> $GITHUB_ENV
+          elif [[ "${{ matrix.os.name }}" == "macos" ]]; then
+            echo "CONFIG_FILE=Dep.Tests/puppeteer/config_chrome_mac.json" >> $GITHUB_ENV
+          fi
+
+      - name: Set URL in config
+        shell: bash
+        run: |
+          URL_INPUT="${{ github.event.inputs.url }}"
+
+          if [[ "$URL_INPUT" == "release" ]]; then
+            URL="${{ secrets.URL_RELEASE }}"
+          elif [[ "$URL_INPUT" == "hotfix" ]]; then
+            URL="${{ secrets.URL_HOTFIX }}"
+          elif [[ "$URL_INPUT" == "develop" ]]; then
+            URL="${{ secrets.URL_DEVELOP }}"
+          else
+            URL="$URL_INPUT"
+          fi
+
+          node -e "
+            const fs = require('fs');
+            const filePath = '${{ env.CONFIG_FILE }}';
+            const config = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+
+            config.serverUrl = '$URL';
+
+            fs.writeFileSync(filePath, JSON.stringify(config, null, 2));
+          "
+
+      - name: Add reports key to config
+        shell: bash
+        run: |
+          node -e "
+            const fs = require('fs');
+            const filePath = 'Dep.Tests/tools/report_portal/config.json';
+            const config = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+
+            config.api_key = '${{ secrets.REPORT_KEY }}';
+            config.project_name = 'docsserver';
+            config.launch_name = 'DocServer Tests - ${{ matrix.os.name }} - Chunk ${{ matrix.chunk }}';
+
+            fs.writeFileSync(filePath, JSON.stringify(config, null, 2));
+          "
+
+      - name: Set headless mode for linux
+        if: matrix.os.name == 'linux'
+        shell: bash
+        run: |
+          node -e "
+            const fs = require('fs');
+            const filePath = 'Dep.Tests/puppeteer/config_chrome_linux.json';
+            const config = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+
+            config.puppeteerOptions.headless = true;
+
+            fs.writeFileSync(filePath, JSON.stringify(config, null, 2));
+          "
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          cd Dep.Tests/puppeteer/engine
+          npm install
+
+      - name: Configure Puppeteer sandbox (Linux only)
+        if: matrix.os.name == 'linux'
+        shell: bash
+        run: |
+          CHROME_VERSION=$(ls ~/.cache/puppeteer/chrome/linux-* -d 2>/dev/null | head -n 1 | xargs basename 2>/dev/null || echo "")
+          if [ -z "$CHROME_VERSION" ]; then
+            echo "Chrome not installed yet, will be configured after npm install"
+          else
+            cd ~/.cache/puppeteer/chrome/$CHROME_VERSION/chrome-linux64/
+            sudo chown root:root chrome_sandbox
+            sudo chmod 4755 chrome_sandbox
+            sudo cp -p chrome_sandbox /usr/local/sbin/chrome-devel-sandbox
+          fi
+          echo "CHROME_DEVEL_SANDBOX=/usr/local/sbin/chrome-devel-sandbox" >> $GITHUB_ENV
+
+      - name: Run tests chunk
+        shell: bash
+        run: |
+          cd Dep.Tests/puppeteer/engine
+
+          CHUNK_SIZE="${{ needs.prepare.outputs.chunk_size }}"
+          CHUNK_ID="${{ matrix.chunk }}"
+
+          python run.py \
+            --providers example \
+            --chunk-id $CHUNK_ID \
+            --chunk-size $CHUNK_SIZE \
+            --disable_animation \
+            --config_params puppeteerOptions.headless=true
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: out-${{ matrix.os.name }}-example-chunk-${{ matrix.chunk }}
+          path: Dep.Tests/puppeteer/out
+
+      # - name: Send notification
+      #   if: failure()
+      #   uses: ./.github/actions/telegram-notify
+      #   with:
+      #     telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+      #     telegram_to: ${{ secrets.TELEGRAM_TO }}
+      #     os_name: ${{ matrix.os.name }}
+      #     provider: 'example'
+      #     job_status: ${{ job.status }}
