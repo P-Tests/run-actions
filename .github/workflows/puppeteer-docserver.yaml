@@ -27,6 +27,7 @@ jobs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       num_chunks: ${{ steps.set-matrix.outputs.num_chunks }}
       chunk_size: ${{ steps.set-matrix.outputs.chunk_size }}
+      rp_launch_ids: ${{ steps.create-launches.outputs.launch_ids }}
 
     steps:
       - name: Checkout repository
@@ -76,13 +77,11 @@ jobs:
 
           CHUNK_SIZE="${{ github.event.inputs.chunk_size || '1000' }}"
 
-          # Run count-tests command (using linux config as reference)
           OUTPUT=$(python run.py --providers example --count-tests --chunk-size $CHUNK_SIZE)
 
           echo "Count tests output:"
           echo "$OUTPUT"
 
-          # Parse output
           NUM_CHUNKS=$(echo "$OUTPUT" | grep "num_chunks=" | cut -d'=' -f2)
           MATRIX=$(echo "$OUTPUT" | grep "matrix=" | cut -d'=' -f2-)
 
@@ -93,6 +92,104 @@ jobs:
           echo "Number of chunks: $NUM_CHUNKS"
           echo "Chunk size: $CHUNK_SIZE"
           echo "Matrix: $MATRIX"
+
+      - name: Configure Report Portal
+        shell: bash
+        run: |
+          node -e "
+            const fs = require('fs');
+            const filePath = 'Dep.Tests/tools/report_portal/config.json';
+            const config = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+
+            config.api_key = '${{ secrets.REPORT_KEY }}';
+            config.project_name = 'docsserver';
+
+            fs.writeFileSync(filePath, JSON.stringify(config, null, 2));
+          "
+
+      - name: Set URL in configs
+        shell: bash
+        run: |
+          URL_INPUT="${{ github.event.inputs.url }}"
+
+          if [[ "$URL_INPUT" == "release" ]]; then
+            URL="${{ secrets.URL_RELEASE }}"
+          elif [[ "$URL_INPUT" == "hotfix" ]]; then
+            URL="${{ secrets.URL_HOTFIX }}"
+          elif [[ "$URL_INPUT" == "develop" ]]; then
+            URL="${{ secrets.URL_DEVELOP }}"
+          else
+            URL="$URL_INPUT"
+          fi
+
+          echo "Setting URL in all configs: $URL"
+
+          # Set URL in all Puppeteer config files
+          for config_file in Dep.Tests/puppeteer/config_chrome_win.json Dep.Tests/puppeteer/config_chrome_linux.json Dep.Tests/puppeteer/config_chrome_mac.json; do
+            node -e "
+              const fs = require('fs');
+              const config = JSON.parse(fs.readFileSync('$config_file', 'utf8'));
+              config.testOptions.url = '$URL';
+              fs.writeFileSync('$config_file', JSON.stringify(config, null, 2));
+            "
+          done
+
+      - name: Create Report Portal Launches
+        id: create-launches
+        shell: bash
+        run: |
+          cd Dep.Tests/tools/report_portal
+
+          node -e "
+            const { execSync } = require('child_process');
+            const fs = require('fs');
+
+            const osList = [
+              { name: 'windows', displayName: 'Windows', configFile: 'config_chrome_win.json' },
+              { name: 'linux', displayName: 'Linux', configFile: 'config_chrome_linux.json' },
+              { name: 'macos', displayName: 'macOS', configFile: 'config_chrome_mac.json' }
+            ];
+
+            const launchIds = {};
+
+            for (const os of osList) {
+              const launchName = \`Github Action \${os.displayName} Tests\`;
+              console.log(\`Creating launch for \${os.name}...\`);
+
+              const configPath = \`../../puppeteer/\${os.configFile}\`;
+
+              try {
+                // manage_launch.py automatically determines launch attributes:
+                // - platform: from system (windows/linux/macos)
+                // - browser: from config.puppeteerOptions.browser
+                // - provider: from --provider flag
+                // - version & build: from config.testOptions.url
+                const output = execSync(
+                  \`python manage_launch.py create --name \"\${launchName}\" --config-puppeteer \${configPath} --provider example\`,
+                  { encoding: 'utf-8' }
+                );
+
+                console.log(output);
+
+                const match = output.match(/LAUNCH_ID=(.+)/);
+                if (!match) {
+                  throw new Error(\`Failed to extract launch ID for \${os.name}\`);
+                }
+
+                const launchId = match[1].trim();
+                launchIds[os.name] = launchId;
+                console.log(\`Created Report Portal launch for \${os.name}: \${launchId}\`);
+              } catch (error) {
+                console.error(\`ERROR: Failed to create Report Portal launch for \${os.name}\`);
+                console.error(error.message);
+                process.exit(1);
+              }
+            }
+
+            const launchIdsJson = JSON.stringify(launchIds);
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, \`launch_ids=\${launchIdsJson}\n\`);
+            console.log(\`All Report Portal launches created: \${launchIdsJson}\`);
+          "
 
   run-tests:
     name: Run Tests - ${{ matrix.os.name }} - Chunk ${{ matrix.chunk }}
@@ -175,12 +272,12 @@ jobs:
             const filePath = '${{ env.CONFIG_FILE }}';
             const config = JSON.parse(fs.readFileSync(filePath, 'utf8'));
 
-            config.serverUrl = '$URL';
+            config.testOptions.url = '$URL';
 
             fs.writeFileSync(filePath, JSON.stringify(config, null, 2));
           "
 
-      - name: Add reports key to config
+      - name: Configure Report Portal
         shell: bash
         run: |
           node -e "
@@ -190,7 +287,6 @@ jobs:
 
             config.api_key = '${{ secrets.REPORT_KEY }}';
             config.project_name = 'docsserver';
-            config.launch_name = 'DocServer Tests - ${{ matrix.os.name }} - Chunk ${{ matrix.chunk }}';
 
             fs.writeFileSync(filePath, JSON.stringify(config, null, 2));
           "
@@ -230,6 +326,22 @@ jobs:
           fi
           echo "CHROME_DEVEL_SANDBOX=/usr/local/sbin/chrome-devel-sandbox" >> $GITHUB_ENV
 
+      - name: Determine Report Portal Launch ID
+        shell: bash
+        run: |
+          LAUNCH_ID=$(node -e "
+            const launchIds = ${{ needs.prepare.outputs.rp_launch_ids }};
+            console.log(launchIds['${{ matrix.os.name }}'] || '');
+          ")
+
+          if [ -z "$LAUNCH_ID" ]; then
+            echo "ERROR: No launch ID found for ${{ matrix.os.name }}"
+            exit 1
+          fi
+
+          echo "RP_LAUNCH_ID=$LAUNCH_ID" >> $GITHUB_ENV
+          echo "Using Report Portal launch ID for ${{ matrix.os.name }}: $LAUNCH_ID"
+
       - name: Run tests chunk
         shell: bash
         run: |
@@ -243,7 +355,10 @@ jobs:
             --chunk-id $CHUNK_ID \
             --chunk-size $CHUNK_SIZE \
             --disable_animation \
-            --config_params puppeteerOptions.headless=true
+            --config_params puppeteerOptions.headless=true \
+            --connect_portal \
+            --rp-launch-id "$RP_LAUNCH_ID" \
+            --rp-no-finish
 
       - name: Upload artifacts
         if: always()
@@ -261,3 +376,83 @@ jobs:
       #     os_name: ${{ matrix.os.name }}
       #     provider: 'example'
       #     job_status: ${{ job.status }}
+
+  finalize:
+    name: Finalize Launch - ${{ matrix.os.name }}
+    needs: [prepare, run-tests]
+    runs-on: ubuntu-latest
+    if: always()
+    strategy:
+      matrix:
+        os:
+          - name: windows
+            display_name: Windows
+          - name: linux
+            display_name: Linux
+          - name: macos
+            display_name: macOS
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Checkout main repository Dep.Tests
+        uses: actions/checkout@v4
+        with:
+          repository: ONLYOFFICE-data/Dep.Tests
+          path: Dep.Tests
+          token: ${{ secrets.READ_PAT }}
+
+      - name: Configure Report Portal
+        shell: bash
+        run: |
+          node -e "
+            const fs = require('fs');
+            const filePath = 'Dep.Tests/tools/report_portal/config.json';
+            const config = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+
+            config.api_key = '${{ secrets.REPORT_KEY }}';
+            config.project_name = 'docsserver';
+
+            fs.writeFileSync(filePath, JSON.stringify(config, null, 2));
+          "
+
+      - name: Determine final status
+        id: status
+        shell: bash
+        run: |
+          if [[ "${{ needs.run-tests.result }}" == "success" ]]; then
+            echo "status=PASSED" >> $GITHUB_OUTPUT
+          else
+            echo "status=FAILED" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Finish Report Portal Launch
+        shell: bash
+        run: |
+          cd Dep.Tests/tools/report_portal
+
+          LAUNCH_ID=$(node -e "
+            const launchIds = ${{ needs.prepare.outputs.rp_launch_ids }};
+            console.log(launchIds['${{ matrix.os.name }}'] || '');
+          ")
+
+          if [ -z "$LAUNCH_ID" ]; then
+            echo "ERROR: No launch ID for ${{ matrix.os.name }}"
+            exit 1
+          fi
+
+          STATUS="${{ steps.status.outputs.status }}"
+
+          echo "Finishing Report Portal launch for ${{ matrix.os.name }}: $LAUNCH_ID with status: $STATUS"
+
+          python manage_launch.py finish \
+            --launch-id "$LAUNCH_ID" \
+            --status "$STATUS"
+
+          echo "Report Portal launch for ${{ matrix.os.name }} finished successfully"
