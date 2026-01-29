@@ -330,7 +330,7 @@ jobs:
         shell: bash
         run: |
           LAUNCH_ID=$(node -e "
-            const launchIds = ${{ needs.prepare.outputs.rp_launch_ids }};
+            const launchIds = JSON.parse('${{ toJSON(needs.prepare.outputs.rp_launch_ids) }}');
             console.log(launchIds['${{ matrix.os.name }}'] || '');
           ")
 
@@ -438,7 +438,7 @@ jobs:
           cd Dep.Tests/tools/report_portal
 
           LAUNCH_ID=$(node -e "
-            const launchIds = ${{ needs.prepare.outputs.rp_launch_ids }};
+            const launchIds = JSON.parse('${{ toJSON(needs.prepare.outputs.rp_launch_ids) }}');
             console.log(launchIds['${{ matrix.os.name }}'] || '');
           ")
 
