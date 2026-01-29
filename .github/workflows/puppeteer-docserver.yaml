@@ -129,7 +129,7 @@ jobs:
             node -e "
               const fs = require('fs');
               const config = JSON.parse(fs.readFileSync('$config_file', 'utf8'));
-              config.testOptions.url = '$URL';
+              config.testOptions.url = '$URL' + '/example';
               fs.writeFileSync('$config_file', JSON.stringify(config, null, 2));
             "
           done
@@ -159,11 +159,6 @@ jobs:
               const configPath = \`../../puppeteer/\${os.configFile}\`;
 
               try {
-                // manage_launch.py automatically determines launch attributes:
-                // - platform: from system (windows/linux/macos)
-                // - browser: from config.puppeteerOptions.browser
-                // - provider: from --provider flag
-                // - version & build: from config.testOptions.url
                 const output = execSync(
                   \`python manage_launch.py create --name \"\${launchName}\" --config-puppeteer \${configPath} --provider example\`,
                   { encoding: 'utf-8' }
@@ -272,7 +267,7 @@ jobs:
             const filePath = '${{ env.CONFIG_FILE }}';
             const config = JSON.parse(fs.readFileSync(filePath, 'utf8'));
 
-            config.testOptions.url = '$URL';
+            config.testOptions.url = '$URL' + '/example';
 
             fs.writeFileSync(filePath, JSON.stringify(config, null, 2));
           "
@@ -329,10 +324,7 @@ jobs:
       - name: Determine Report Portal Launch ID
         shell: bash
         run: |
-          LAUNCH_ID=$(node -e "
-            const launchIds = ${{ needs.prepare.outputs.rp_launch_ids }};
-            console.log(launchIds['${{ matrix.os.name }}'] || '');
-          ")
+          LAUNCH_ID="${{ fromJSON(needs.prepare.outputs.rp_launch_ids)[matrix.os.name] }}"
 
           if [ -z "$LAUNCH_ID" ]; then
             echo "ERROR: No launch ID found for ${{ matrix.os.name }}"
@@ -437,10 +429,7 @@ jobs:
         run: |
           cd Dep.Tests/tools/report_portal
 
-          LAUNCH_ID=$(node -e "
-            const launchIds = ${{ needs.prepare.outputs.rp_launch_ids }};
-            console.log(launchIds['${{ matrix.os.name }}'] || '');
-          ")
+          LAUNCH_ID="${{ fromJSON(needs.prepare.outputs.rp_launch_ids)[matrix.os.name] }}"
 
           if [ -z "$LAUNCH_ID" ]; then
             echo "ERROR: No launch ID for ${{ matrix.os.name }}"
