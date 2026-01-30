@@ -1,245 +1,245 @@
 name: Puppeteer Daily Tests
 
 on:
-    schedule:
-        - cron: "0 20 * * *"
-    workflow_dispatch:
+  schedule:
+    - cron: "0 20 * * *"
+  workflow_dispatch:
 
 jobs:
-    test-docspaceEU:
-        name: DocSpace EU - ${{ matrix.os.name }}
-        runs-on: ${{ matrix.os.runner }}
-        strategy:
-            matrix:
-                os:
-                    - name: windows
-                      runner: windows-latest
-                    - name: linux
-                      runner: ubuntu-latest
-                    - name: macos
-                      runner: macos-latest
-            fail-fast: false
+  test-docspaceEU:
+    name: DocSpace EU - ${{ matrix.os.name }}
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      matrix:
+        os:
+          - name: windows
+            runner: windows-latest
+          - name: linux
+            runner: ubuntu-latest
+          - name: macos
+            runner: macos-latest
+      fail-fast: false
 
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-            - name: Run Puppeteer Tests
-              uses: ./.github/actions/puppeteer-test
-              with:
-                  provider: "docspaceEU"
-                  project_name: "docsserver-daily"
-                  suite: "daily"
-                  launch_name: "Daily Tests"
-                  os_name: ${{ matrix.os.name }}
-                  read_pat: ${{ secrets.READ_PAT }}
-                  report_key: ${{ secrets.REPORT_KEY }}
+      - name: Run Puppeteer Tests
+        uses: ./.github/actions/puppeteer-test
+        with:
+          provider: "docspaceEU"
+          project_name: "docsserver-daily"
+          suite: "daily"
+          launch_name: "Daily Tests"
+          os_name: ${{ matrix.os.name }}
+          read_pat: ${{ secrets.READ_PAT }}
+          report_key: ${{ secrets.REPORT_KEY }}
 
-            - name: Send message to Telegram
-              if: always()
-              uses: ./.github/actions/telegram-notify
-              with:
-                  telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
-                  telegram_to: ${{ secrets.TELEGRAM_TO }}
-                  os_name: ${{ matrix.os.name }}
-                  provider: "docspaceEU"
-                  job_status: ${{ job.status }}
+      - name: Send message to Telegram
+        if: always()
+        uses: ./.github/actions/telegram-notify
+        with:
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_TO }}
+          os_name: ${{ matrix.os.name }}
+          provider: "docspaceEU"
+          job_status: ${{ job.status }}
 
-    test-docspaceUS:
-        name: DocSpace US - ${{ matrix.os.name }}
-        runs-on: ${{ matrix.os.runner }}
-        strategy:
-            matrix:
-                os:
-                    - name: windows
-                      runner: windows-latest
-                    - name: linux
-                      runner: ubuntu-latest
-                    - name: macos
-                      runner: macos-latest
-            fail-fast: false
+  test-docspaceUS:
+    name: DocSpace US - ${{ matrix.os.name }}
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      matrix:
+        os:
+          - name: windows
+            runner: windows-latest
+          - name: linux
+            runner: ubuntu-latest
+          - name: macos
+            runner: macos-latest
+      fail-fast: false
 
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-            - name: Run Puppeteer Tests
-              uses: ./.github/actions/puppeteer-test
-              with:
-                  provider: "docspaceUS"
-                  project_name: "docsserver-daily"
-                  suite: "daily"
-                  launch_name: "Daily Tests"
-                  os_name: ${{ matrix.os.name }}
-                  read_pat: ${{ secrets.READ_PAT }}
-                  report_key: ${{ secrets.REPORT_KEY }}
+      - name: Run Puppeteer Tests
+        uses: ./.github/actions/puppeteer-test
+        with:
+          provider: "docspaceUS"
+          project_name: "docsserver-daily"
+          suite: "daily"
+          launch_name: "Daily Tests"
+          os_name: ${{ matrix.os.name }}
+          read_pat: ${{ secrets.READ_PAT }}
+          report_key: ${{ secrets.REPORT_KEY }}
 
-            - name: Send message to Telegram
-              if: always()
-              uses: ./.github/actions/telegram-notify
-              with:
-                  telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
-                  telegram_to: ${{ secrets.TELEGRAM_TO }}
-                  os_name: ${{ matrix.os.name }}
-                  provider: "docspaceUS"
-                  job_status: ${{ job.status }}
+      - name: Send message to Telegram
+        if: always()
+        uses: ./.github/actions/telegram-notify
+        with:
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_TO }}
+          os_name: ${{ matrix.os.name }}
+          provider: "docspaceUS"
+          job_status: ${{ job.status }}
 
-    test-ncoc:
-        name: NCOC - ${{ matrix.os.name }}
-        needs: [test-docspaceEU, test-docspaceUS]
-        runs-on: ${{ matrix.os.runner }}
-        strategy:
-            matrix:
-                os:
-                    - name: windows
-                      runner: windows-latest
-                    - name: linux
-                      runner: ubuntu-latest
-                    - name: macos
-                      runner: macos-latest
-            fail-fast: false
+  test-ncoc:
+    name: NCOC - ${{ matrix.os.name }}
+    needs: [test-docspaceEU, test-docspaceUS]
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      matrix:
+        os:
+          - name: windows
+            runner: windows-latest
+          - name: linux
+            runner: ubuntu-latest
+          - name: macos
+            runner: macos-latest
+      fail-fast: false
 
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-            - name: Run Puppeteer Tests
-              uses: ./.github/actions/puppeteer-test
-              with:
-                  provider: "ncoc"
-                  project_name: "docsserver-daily"
-                  suite: "daily"
-                  launch_name: "Daily Tests"
-                  os_name: ${{ matrix.os.name }}
-                  read_pat: ${{ secrets.READ_PAT }}
-                  report_key: ${{ secrets.REPORT_KEY }}
+      - name: Run Puppeteer Tests
+        uses: ./.github/actions/puppeteer-test
+        with:
+          provider: "ncoc"
+          project_name: "docsserver-daily"
+          suite: "daily"
+          launch_name: "Daily Tests"
+          os_name: ${{ matrix.os.name }}
+          read_pat: ${{ secrets.READ_PAT }}
+          report_key: ${{ secrets.REPORT_KEY }}
 
-            - name: Send message to Telegram
-              if: always()
-              uses: ./.github/actions/telegram-notify
-              with:
-                  telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
-                  telegram_to: ${{ secrets.TELEGRAM_TO }}
-                  os_name: ${{ matrix.os.name }}
-                  provider: "ncoc"
-                  job_status: ${{ job.status }}
+      - name: Send message to Telegram
+        if: always()
+        uses: ./.github/actions/telegram-notify
+        with:
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_TO }}
+          os_name: ${{ matrix.os.name }}
+          provider: "ncoc"
+          job_status: ${{ job.status }}
 
-    test-ocis:
-        name: OCIS - ${{ matrix.os.name }}
-        needs: test-ncoc
-        runs-on: ${{ matrix.os.runner }}
-        strategy:
-            matrix:
-                os:
-                    - name: windows
-                      runner: windows-latest
-                    - name: linux
-                      runner: ubuntu-latest
-                    - name: macos
-                      runner: macos-latest
-            fail-fast: false
+  test-ocis:
+    name: OCIS - ${{ matrix.os.name }}
+    needs: test-ncoc
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      matrix:
+        os:
+          - name: windows
+            runner: windows-latest
+          - name: linux
+            runner: ubuntu-latest
+          - name: macos
+            runner: macos-latest
+      fail-fast: false
 
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-            - name: Run Puppeteer Tests
-              uses: ./.github/actions/puppeteer-test
-              with:
-                  provider: "ocis"
-                  project_name: "docsserver-daily"
-                  suite: "daily"
-                  launch_name: "Daily Tests"
-                  os_name: ${{ matrix.os.name }}
-                  read_pat: ${{ secrets.READ_PAT }}
-                  report_key: ${{ secrets.REPORT_KEY }}
+      - name: Run Puppeteer Tests
+        uses: ./.github/actions/puppeteer-test
+        with:
+          provider: "ocis"
+          project_name: "docsserver-daily"
+          suite: "daily"
+          launch_name: "Daily Tests"
+          os_name: ${{ matrix.os.name }}
+          read_pat: ${{ secrets.READ_PAT }}
+          report_key: ${{ secrets.REPORT_KEY }}
 
-            - name: Send message to Telegram
-              if: always()
-              uses: ./.github/actions/telegram-notify
-              with:
-                  telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
-                  telegram_to: ${{ secrets.TELEGRAM_TO }}
-                  os_name: ${{ matrix.os.name }}
-                  provider: "ocis"
-                  job_status: ${{ job.status }}
+      - name: Send message to Telegram
+        if: always()
+        uses: ./.github/actions/telegram-notify
+        with:
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_TO }}
+          os_name: ${{ matrix.os.name }}
+          provider: "ocis"
+          job_status: ${{ job.status }}
 
-    test-wopi:
-        name: WOPI - ${{ matrix.os.name }}
-        needs: test-ocis
-        runs-on: ${{ matrix.os.runner }}
-        strategy:
-            matrix:
-                os:
-                    - name: windows
-                      runner: windows-latest
-                    - name: linux
-                      runner: ubuntu-latest
-                    - name: macos
-                      runner: macos-latest
-            fail-fast: false
+  test-wopi:
+    name: WOPI - ${{ matrix.os.name }}
+    needs: test-ocis
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      matrix:
+        os:
+          - name: windows
+            runner: windows-latest
+          - name: linux
+            runner: ubuntu-latest
+          - name: macos
+            runner: macos-latest
+      fail-fast: false
 
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-            - name: Run Puppeteer Tests
-              uses: ./.github/actions/puppeteer-test
-              with:
-                  provider: "wopi"
-                  project_name: "docsserver-daily"
-                  suite: "daily"
-                  launch_name: "Daily Tests"
-                  os_name: ${{ matrix.os.name }}
-                  read_pat: ${{ secrets.READ_PAT }}
-                  report_key: ${{ secrets.REPORT_KEY }}
+      - name: Run Puppeteer Tests
+        uses: ./.github/actions/puppeteer-test
+        with:
+          provider: "wopi"
+          project_name: "docsserver-daily"
+          suite: "daily"
+          launch_name: "Daily Tests"
+          os_name: ${{ matrix.os.name }}
+          read_pat: ${{ secrets.READ_PAT }}
+          report_key: ${{ secrets.REPORT_KEY }}
 
-            - name: Send message to Telegram
-              if: always()
-              uses: ./.github/actions/telegram-notify
-              with:
-                  telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
-                  telegram_to: ${{ secrets.TELEGRAM_TO }}
-                  os_name: ${{ matrix.os.name }}
-                  provider: "wopi"
-                  job_status: ${{ job.status }}
+      - name: Send message to Telegram
+        if: always()
+        uses: ./.github/actions/telegram-notify
+        with:
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_TO }}
+          os_name: ${{ matrix.os.name }}
+          provider: "wopi"
+          job_status: ${{ job.status }}
 
-    test-example:
-        name: Example - ${{ matrix.os.name }}
-        needs: test-wopi
-        runs-on: ${{ matrix.os.runner }}
-        strategy:
-            matrix:
-                os:
-                    - name: windows
-                      runner: windows-latest
-                    - name: linux
-                      runner: ubuntu-latest
-                    - name: macos
-                      runner: macos-latest
-            fail-fast: false
+  test-example:
+    name: Example - ${{ matrix.os.name }}
+    needs: test-wopi
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      matrix:
+        os:
+          - name: windows
+            runner: windows-latest
+          - name: linux
+            runner: ubuntu-latest
+          - name: macos
+            runner: macos-latest
+      fail-fast: false
 
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-            - name: Run Puppeteer Tests
-              uses: ./.github/actions/puppeteer-test
-              with:
-                  provider: "example"
-                  project_name: "docsserver-daily"
-                  suite: "daily"
-                  launch_name: "Daily Tests"
-                  os_name: ${{ matrix.os.name }}
-                  read_pat: ${{ secrets.READ_PAT }}
-                  report_key: ${{ secrets.REPORT_KEY }}
+      - name: Run Puppeteer Tests
+        uses: ./.github/actions/puppeteer-test
+        with:
+          provider: "example"
+          project_name: "docsserver-daily"
+          suite: "daily"
+          launch_name: "Daily Tests"
+          os_name: ${{ matrix.os.name }}
+          read_pat: ${{ secrets.READ_PAT }}
+          report_key: ${{ secrets.REPORT_KEY }}
 
-            - name: Send message to Telegram
-              if: always()
-              uses: ./.github/actions/telegram-notify
-              with:
-                  telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
-                  telegram_to: ${{ secrets.TELEGRAM_TO }}
-                  os_name: ${{ matrix.os.name }}
-                  provider: "example"
-                  job_status: ${{ job.status }}
+      - name: Send message to Telegram
+        if: always()
+        uses: ./.github/actions/telegram-notify
+        with:
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_TO }}
+          os_name: ${{ matrix.os.name }}
+          provider: "example"
+          job_status: ${{ job.status }}
