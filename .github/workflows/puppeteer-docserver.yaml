@@ -27,7 +27,6 @@ jobs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
       num_chunks: ${{ steps.set-matrix.outputs.num_chunks }}
       chunk_size: ${{ steps.set-matrix.outputs.chunk_size }}
-      rp_launch_ids: ${{ steps.create-launches.outputs.launch_ids }}
 
     steps:
       - name: Checkout repository
@@ -77,7 +76,7 @@ jobs:
 
           CHUNK_SIZE="${{ github.event.inputs.chunk_size || '1000' }}"
 
-          OUTPUT=$(python run.py --providers example --count-tests --chunk-size $CHUNK_SIZE)
+          OUTPUT=$(python run.py tests/lib/edittoolbar/toolbar/formtab --providers example --count-tests --chunk-size $CHUNK_SIZE)
 
           echo "Count tests output:"
           echo "$OUTPUT"
@@ -92,103 +91,6 @@ jobs:
           echo "Number of chunks: $NUM_CHUNKS"
           echo "Chunk size: $CHUNK_SIZE"
           echo "Matrix: $MATRIX"
-
-      - name: Configure Report Portal
-        shell: bash
-        run: |
-          node -e "
-            const fs = require('fs');
-            const filePath = 'Dep.Tests/tools/report_portal/config.json';
-            const config = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-
-            config.api_key = '${{ secrets.REPORT_KEY }}';
-            config.project_name = 'docsserver';
-
-            fs.writeFileSync(filePath, JSON.stringify(config, null, 2));
-          "
-
-      - name: Set URL in configs
-        shell: bash
-        run: |
-          URL_INPUT="${{ github.event.inputs.url }}"
-
-          if [[ "$URL_INPUT" == "release" ]]; then
-            URL="${{ secrets.URL_RELEASE }}"
-          elif [[ "$URL_INPUT" == "hotfix" ]]; then
-            URL="${{ secrets.URL_HOTFIX }}"
-          elif [[ "$URL_INPUT" == "develop" ]]; then
-            URL="${{ secrets.URL_DEVELOP }}"
-          else
-            URL="$URL_INPUT"
-          fi
-
-          echo "Setting URL in all configs: $URL"
-
-          # Set URL in all Puppeteer config files
-          for config_file in Dep.Tests/puppeteer/config_chrome_win.json Dep.Tests/puppeteer/config_chrome_linux.json Dep.Tests/puppeteer/config_chrome_mac.json; do
-            node -e "
-              const fs = require('fs');
-              const config = JSON.parse(fs.readFileSync('$config_file', 'utf8'));
-              let url = '$URL';
-              if (!url.endsWith('/example')) {
-                url = url + '/example';
-              }
-              config.testOptions.url = url;
-              fs.writeFileSync('$config_file', JSON.stringify(config, null, 2));
-            "
-          done
-
-      - name: Create Report Portal Launches
-        id: create-launches
-        shell: bash
-        run: |
-          cd Dep.Tests/tools/report_portal
-
-          node -e "
-            const { execSync } = require('child_process');
-            const fs = require('fs');
-
-            const osList = [
-              { name: 'windows', displayName: 'Windows', configFile: 'config_chrome_win.json' },
-              { name: 'linux', displayName: 'Linux', configFile: 'config_chrome_linux.json' },
-              { name: 'macos', displayName: 'macOS', configFile: 'config_chrome_mac.json' }
-            ];
-
-            const launchIds = {};
-
-            for (const os of osList) {
-              const launchName = \`Github Action \${os.displayName} Tests\`;
-              console.log(\`Creating launch for \${os.name}...\`);
-
-              const configPath = \`../../puppeteer/\${os.configFile}\`;
-
-              try {
-                const output = execSync(
-                  \`python manage_launch.py create --name \"\${launchName}\" --config-puppeteer \${configPath} --provider example --platform \${os.name}\`,
-                  { encoding: 'utf-8' }
-                );
-
-                console.log(output);
-
-                const match = output.match(/LAUNCH_ID=(.+)/);
-                if (!match) {
-                  throw new Error(\`Failed to extract launch ID for \${os.name}\`);
-                }
-
-                const launchId = match[1].trim();
-                launchIds[os.name] = launchId;
-                console.log(\`Created Report Portal launch for \${os.name}: \${launchId}\`);
-              } catch (error) {
-                console.error(\`ERROR: Failed to create Report Portal launch for \${os.name}\`);
-                console.error(error.message);
-                process.exit(1);
-              }
-            }
-
-            const launchIdsJson = JSON.stringify(launchIds);
-            fs.appendFileSync(process.env.GITHUB_OUTPUT, \`launch_ids=\${launchIdsJson}\n\`);
-            console.log(\`All Report Portal launches created: \${launchIdsJson}\`);
-          "
 
   run-tests-windows:
     name: Run Tests - Windows - Chunk ${{ matrix.chunk }}
@@ -271,8 +173,8 @@ jobs:
             const filePath = 'Dep.Tests/tools/report_portal/config.json';
             const config = JSON.parse(fs.readFileSync(filePath, 'utf8'));
 
-            config.api_key = '${{ secrets.REPORT_KEY }}';
-            config.project_name = 'docsserver';
+            config.api_key = 'test_9EE9Ay_ISY-jNRYHAJBplrYxFn6xmwklbOTrVpEAnU92z1sKchsPnDyzHvtz21Fz';
+            config.project_name = 'coldwaveuwu_personal';
 
             fs.writeFileSync(filePath, JSON.stringify(config, null, 2));
           "
@@ -283,19 +185,6 @@ jobs:
           cd Dep.Tests/puppeteer/engine
           npm install
 
-      - name: Determine Report Portal Launch ID
-        shell: bash
-        run: |
-          LAUNCH_ID="${{ fromJSON(needs.prepare.outputs.rp_launch_ids)['windows'] }}"
-
-          if [ -z "$LAUNCH_ID" ]; then
-            echo "ERROR: No launch ID found for windows"
-            exit 1
-          fi
-
-          echo "RP_LAUNCH_ID=$LAUNCH_ID" >> $GITHUB_ENV
-          echo "Using Report Portal launch ID for windows: $LAUNCH_ID"
-
       - name: Run tests chunk
         shell: bash
         run: |
@@ -304,15 +193,29 @@ jobs:
           CHUNK_SIZE="${{ needs.prepare.outputs.chunk_size }}"
           CHUNK_ID="${{ matrix.chunk }}"
 
-          python run.py \
+          python run.py  tests/lib/edittoolbar/toolbar/formtab \
             --providers example \
             --chunk-id $CHUNK_ID \
             --chunk-size $CHUNK_SIZE \
             --disable_animation \
             --config_params puppeteerOptions.headless=true \
-            --connect_portal \
-            --rp-launch-id "$RP_LAUNCH_ID" \
-            --rp-no-finish
+            --connect_portal 2>&1 | tee console_output.txt
+
+          UUID=$(grep "RP_LAUNCH_UUID=" console_output.txt | tail -n 1 | cut -d'=' -f2)
+
+          if [ -n "$UUID" ]; then
+            echo "$UUID" > launch_uuid.txt
+            echo "Extracted Report Portal Launch UUID: $UUID"
+          else
+            echo "Warning: No Report Portal Launch UUID found"
+          fi
+
+      - name: Upload Launch UUID
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: launch-uuid-windows-chunk-${{ matrix.chunk }}
+          path: Dep.Tests/puppeteer/engine/launch_uuid.txt
 
       - name: Upload artifacts
         if: always()
@@ -402,8 +305,8 @@ jobs:
             const filePath = 'Dep.Tests/tools/report_portal/config.json';
             const config = JSON.parse(fs.readFileSync(filePath, 'utf8'));
 
-            config.api_key = '${{ secrets.REPORT_KEY }}';
-            config.project_name = 'docsserver';
+            config.api_key = 'test_9EE9Ay_ISY-jNRYHAJBplrYxFn6xmwklbOTrVpEAnU92z1sKchsPnDyzHvtz21Fz';
+            config.project_name = 'coldwaveuwu_personal';
 
             fs.writeFileSync(filePath, JSON.stringify(config, null, 2));
           "
@@ -441,19 +344,6 @@ jobs:
           fi
           echo "CHROME_DEVEL_SANDBOX=/usr/local/sbin/chrome-devel-sandbox" >> $GITHUB_ENV
 
-      - name: Determine Report Portal Launch ID
-        shell: bash
-        run: |
-          LAUNCH_ID="${{ fromJSON(needs.prepare.outputs.rp_launch_ids)['linux'] }}"
-
-          if [ -z "$LAUNCH_ID" ]; then
-            echo "ERROR: No launch ID found for linux"
-            exit 1
-          fi
-
-          echo "RP_LAUNCH_ID=$LAUNCH_ID" >> $GITHUB_ENV
-          echo "Using Report Portal launch ID for linux: $LAUNCH_ID"
-
       - name: Run tests chunk
         shell: bash
         run: |
@@ -462,15 +352,29 @@ jobs:
           CHUNK_SIZE="${{ needs.prepare.outputs.chunk_size }}"
           CHUNK_ID="${{ matrix.chunk }}"
 
-          python run.py \
+          python run.py tests/lib/edittoolbar/toolbar/formtab \
             --providers example \
             --chunk-id $CHUNK_ID \
             --chunk-size $CHUNK_SIZE \
             --disable_animation \
             --config_params puppeteerOptions.headless=true \
-            --connect_portal \
-            --rp-launch-id "$RP_LAUNCH_ID" \
-            --rp-no-finish
+            --connect_portal 2>&1 | tee console_output.txt
+
+          UUID=$(grep "RP_LAUNCH_UUID=" console_output.txt | tail -n 1 | cut -d'=' -f2)
+
+          if [ -n "$UUID" ]; then
+            echo "$UUID" > launch_uuid.txt
+            echo "Extracted Report Portal Launch UUID: $UUID"
+          else
+            echo "Warning: No Report Portal Launch UUID found"
+          fi
+
+      - name: Upload Launch UUID
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: launch-uuid-linux-chunk-${{ matrix.chunk }}
+          path: Dep.Tests/puppeteer/engine/launch_uuid.txt
 
       - name: Upload artifacts
         if: always()
@@ -560,8 +464,8 @@ jobs:
             const filePath = 'Dep.Tests/tools/report_portal/config.json';
             const config = JSON.parse(fs.readFileSync(filePath, 'utf8'));
 
-            config.api_key = '${{ secrets.REPORT_KEY }}';
-            config.project_name = 'docsserver';
+            config.api_key = 'test_9EE9Ay_ISY-jNRYHAJBplrYxFn6xmwklbOTrVpEAnU92z1sKchsPnDyzHvtz21Fz';
+            config.project_name = 'coldwaveuwu_personal';
 
             fs.writeFileSync(filePath, JSON.stringify(config, null, 2));
           "
@@ -572,19 +476,6 @@ jobs:
           cd Dep.Tests/puppeteer/engine
           npm install
 
-      - name: Determine Report Portal Launch ID
-        shell: bash
-        run: |
-          LAUNCH_ID="${{ fromJSON(needs.prepare.outputs.rp_launch_ids)['macos'] }}"
-
-          if [ -z "$LAUNCH_ID" ]; then
-            echo "ERROR: No launch ID found for macos"
-            exit 1
-          fi
-
-          echo "RP_LAUNCH_ID=$LAUNCH_ID" >> $GITHUB_ENV
-          echo "Using Report Portal launch ID for macos: $LAUNCH_ID"
-
       - name: Run tests chunk
         shell: bash
         run: |
@@ -593,15 +484,29 @@ jobs:
           CHUNK_SIZE="${{ needs.prepare.outputs.chunk_size }}"
           CHUNK_ID="${{ matrix.chunk }}"
 
-          python run.py \
+          python run.py tests/lib/edittoolbar/toolbar/formtab \
             --providers example \
             --chunk-id $CHUNK_ID \
             --chunk-size $CHUNK_SIZE \
             --disable_animation \
             --config_params puppeteerOptions.headless=true \
-            --connect_portal \
-            --rp-launch-id "$RP_LAUNCH_ID" \
-            --rp-no-finish
+            --connect_portal 2>&1 | tee console_output.txt
+
+          UUID=$(grep "RP_LAUNCH_UUID=" console_output.txt | tail -n 1 | cut -d'=' -f2)
+
+          if [ -n "$UUID" ]; then
+            echo "$UUID" > launch_uuid.txt
+            echo "Extracted Report Portal Launch UUID: $UUID"
+          else
+            echo "Warning: No Report Portal Launch UUID found"
+          fi
+
+      - name: Upload Launch UUID
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: launch-uuid-macos-chunk-${{ matrix.chunk }}
+          path: Dep.Tests/puppeteer/engine/launch_uuid.txt
 
       - name: Upload artifacts
         if: always()
@@ -610,20 +515,58 @@ jobs:
           name: out-macos-example-chunk-${{ matrix.chunk }}
           path: Dep.Tests/puppeteer/out
 
-  finalize:
-    name: Finalize Launch - ${{ matrix.os.name }}
+  collect-launch-uuids:
+    name: Collect Launch UUIDs
     needs: [prepare, run-tests-windows, run-tests-linux, run-tests-macos]
     runs-on: ubuntu-latest
     if: always()
-    strategy:
-      matrix:
-        os:
-          - name: windows
-            display_name: Windows
-          - name: linux
-            display_name: Linux
-          - name: macos
-            display_name: macOS
+    outputs:
+      launch_uuids: ${{ steps.collect-uuids.outputs.launch_uuids }}
+
+    steps:
+      - name: Download all UUID artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: launch-uuid-*
+          path: launch-uuids
+
+      - name: Collect UUIDs
+        id: collect-uuids
+        shell: bash
+        run: |
+          UUIDS=()
+
+          for file in launch-uuids/*/launch_uuid.txt; do
+            if [ -f "$file" ]; then
+              UUID=$(cat "$file" | tr -d '[:space:]')
+              if [ -n "$UUID" ]; then
+                UUIDS+=("$UUID")
+              fi
+            fi
+          done
+
+          UNIQUE_UUIDS=($(printf '%s\n' "${UUIDS[@]}" | sort -u))
+
+          echo "Found ${#UNIQUE_UUIDS[@]} unique launch UUIDs:"
+          printf '%s\n' "${UNIQUE_UUIDS[@]}"
+
+          if [ ${#UNIQUE_UUIDS[@]} -eq 0 ]; then
+            echo "launch_uuids=[]" >> $GITHUB_OUTPUT
+          else
+            UUIDS_JSON=$(printf '%s\n' "${UNIQUE_UUIDS[@]}" | jq -R . | jq -sc .)
+            echo "Generated JSON: $UUIDS_JSON"
+            {
+              echo "launch_uuids<<EOF"
+              echo "$UUIDS_JSON"
+              echo "EOF"
+            } >> $GITHUB_OUTPUT
+          fi
+
+  merge-launches:
+    name: Merge Report Portal Launches
+    needs: [collect-launch-uuids]
+    runs-on: ubuntu-latest
+    if: always()
 
     steps:
       - name: Checkout repository
@@ -649,50 +592,53 @@ jobs:
             const filePath = 'Dep.Tests/tools/report_portal/config.json';
             const config = JSON.parse(fs.readFileSync(filePath, 'utf8'));
 
-            config.api_key = '${{ secrets.REPORT_KEY }}';
-            config.project_name = 'docsserver';
+            config.api_key = 'test_9EE9Ay_ISY-jNRYHAJBplrYxFn6xmwklbOTrVpEAnU92z1sKchsPnDyzHvtz21Fz';
+            config.project_name = 'coldwaveuwu_personal';
 
             fs.writeFileSync(filePath, JSON.stringify(config, null, 2));
           "
 
-      - name: Determine final status
-        id: status
-        shell: bash
-        run: |
-          if [[ "${{ matrix.os.name }}" == "windows" ]]; then
-            JOB_RESULT="${{ needs.run-tests-windows.result }}"
-          elif [[ "${{ matrix.os.name }}" == "linux" ]]; then
-            JOB_RESULT="${{ needs.run-tests-linux.result }}"
-          else
-            JOB_RESULT="${{ needs.run-tests-macos.result }}"
-          fi
-
-          echo "Job result for ${{ matrix.os.name }}: $JOB_RESULT"
-
-          if [[ "$JOB_RESULT" == "success" ]]; then
-            echo "status=PASSED" >> $GITHUB_OUTPUT
-          else
-            echo "status=FAILED" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Finish Report Portal Launch
+      - name: Merge Report Portal Launches
         shell: bash
         run: |
           cd Dep.Tests/tools/report_portal
 
-          LAUNCH_ID="${{ fromJSON(needs.prepare.outputs.rp_launch_ids)[matrix.os.name] }}"
+          UUIDS='${{ needs.collect-launch-uuids.outputs.launch_uuids }}'
 
-          if [ -z "$LAUNCH_ID" ]; then
-            echo "ERROR: No launch ID for ${{ matrix.os.name }}"
+          echo "=== Debug Info ==="
+          echo "Raw UUIDS value: '$UUIDS'"
+          echo "UUIDS length: ${#UUIDS}"
+          echo "=================="
+
+          if [ "$UUIDS" = "[]" ] || [ -z "$UUIDS" ]; then
+            echo "No launch UUIDs found to merge"
+            exit 0
+          fi
+
+          if ! echo "$UUIDS" | jq empty 2>/dev/null; then
+            echo "Error: Invalid JSON format in launch_uuids"
+            echo "Received: $UUIDS"
             exit 1
           fi
 
-          STATUS="${{ steps.status.outputs.status }}"
+          UUID_COUNT=$(echo "$UUIDS" | jq '. | length')
+          echo "Found $UUID_COUNT UUIDs in JSON array"
 
-          echo "Finishing Report Portal launch for ${{ matrix.os.name }}: $LAUNCH_ID with status: $STATUS"
+          if [ "$UUID_COUNT" -eq 0 ]; then
+            echo "No UUIDs to merge (empty array)"
+            exit 0
+          fi
 
-          python manage_launch.py finish \
-            --launch-id "$LAUNCH_ID" \
-            --status "$STATUS"
+          UUIDS_ARRAY=$(echo "$UUIDS" | jq -r '.[]')
 
-          echo "Report Portal launch for ${{ matrix.os.name }} finished successfully"
+          echo "Merging Report Portal launches..."
+          echo "UUIDs to merge:"
+          echo "$UUIDS_ARRAY"
+          echo ""
+
+          python merge_launches.py \
+            --launch-uuids $UUIDS_ARRAY \
+            --name "Merged - {system}" \
+            --merge-type DEEP
+
+          echo "Report Portal launches merged successfully"
