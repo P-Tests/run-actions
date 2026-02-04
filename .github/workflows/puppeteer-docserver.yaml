@@ -193,8 +193,7 @@ jobs:
           CHUNK_SIZE="${{ needs.prepare.outputs.chunk_size }}"
           CHUNK_ID="${{ matrix.chunk }}"
 
-          python run.py   \
-            --providers example \
+          python run.py \
             --chunk-id $CHUNK_ID \
             --chunk-size $CHUNK_SIZE \
             --disable_animation \
@@ -352,8 +351,7 @@ jobs:
           CHUNK_SIZE="${{ needs.prepare.outputs.chunk_size }}"
           CHUNK_ID="${{ matrix.chunk }}"
 
-          python run.py  \
-            --providers example \
+          python run.py \
             --chunk-id $CHUNK_ID \
             --chunk-size $CHUNK_SIZE \
             --disable_animation \
@@ -484,8 +482,7 @@ jobs:
           CHUNK_SIZE="${{ needs.prepare.outputs.chunk_size }}"
           CHUNK_ID="${{ matrix.chunk }}"
 
-          python run.py  \
-            --providers example \
+          python run.py \
             --chunk-id $CHUNK_ID \
             --chunk-size $CHUNK_SIZE \
             --disable_animation \
