@@ -76,7 +76,7 @@ jobs:
 
           CHUNK_SIZE="${{ github.event.inputs.chunk_size || '1000' }}"
 
-          OUTPUT=$(python run.py tests/lib/edittoolbar/toolbar/formtab --providers example --count-tests --chunk-size $CHUNK_SIZE)
+          OUTPUT=$(python run.py  --providers example --count-tests --chunk-size $CHUNK_SIZE)
 
           echo "Count tests output:"
           echo "$OUTPUT"
@@ -193,7 +193,7 @@ jobs:
           CHUNK_SIZE="${{ needs.prepare.outputs.chunk_size }}"
           CHUNK_ID="${{ matrix.chunk }}"
 
-          python run.py  tests/lib/edittoolbar/toolbar/formtab \
+          python run.py   \
             --providers example \
             --chunk-id $CHUNK_ID \
             --chunk-size $CHUNK_SIZE \
@@ -352,7 +352,7 @@ jobs:
           CHUNK_SIZE="${{ needs.prepare.outputs.chunk_size }}"
           CHUNK_ID="${{ matrix.chunk }}"
 
-          python run.py tests/lib/edittoolbar/toolbar/formtab \
+          python run.py  \
             --providers example \
             --chunk-id $CHUNK_ID \
             --chunk-size $CHUNK_SIZE \
@@ -484,7 +484,7 @@ jobs:
           CHUNK_SIZE="${{ needs.prepare.outputs.chunk_size }}"
           CHUNK_ID="${{ matrix.chunk }}"
 
-          python run.py tests/lib/edittoolbar/toolbar/formtab \
+          python run.py  \
             --providers example \
             --chunk-id $CHUNK_ID \
             --chunk-size $CHUNK_SIZE \
