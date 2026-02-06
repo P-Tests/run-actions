@@ -29,57 +29,48 @@ jobs:
       chunk_size: ${{ steps.set-matrix.outputs.chunk_size }}
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: Set up nodejs
-        uses: actions/setup-node@v4
-        with:
-          node-version: 'latest'
-
-      - name: Checkout main repository Dep.Tests
+      - name: Checkout Dep.Tests repository
         uses: actions/checkout@v4
         with:
           repository: ONLYOFFICE-data/Dep.Tests
           path: Dep.Tests
           token: ${{ secrets.READ_PAT }}
 
-      - name: Setup Git
-        shell: bash
+      - name: Setup Git credentials
         run: |
           git config --global user.name 'GitHub Actions'
           git config --global user.email 'actions@github.com'
           git config --global url."https://${{ secrets.READ_PAT }}@github.com/".insteadOf "https://github.com/"
 
-      - name: Init specific submodule
-        shell: bash
+      - name: Init puppeteer files submodule
         run: |
           cd Dep.Tests
           git submodule update --init --depth 1 puppeteer/files
 
-      - name: Install dependencies
-        shell: bash
-        run: |
-          cd Dep.Tests/puppeteer/engine
-          npm install
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'latest'
+
+      - name: Install npm dependencies
+        working-directory: Dep.Tests/puppeteer/engine
+        run: npm ci --prefer-offline --no-audit
 
       - name: Count tests and generate matrix
         id: set-matrix
-        shell: bash
+        working-directory: Dep.Tests/puppeteer/engine
         run: |
-          cd Dep.Tests/puppeteer/engine
+          CHUNK_SIZE="${{ github.event.inputs.chunk_size }}"
 
-          CHUNK_SIZE="${{ github.event.inputs.chunk_size || '1000' }}"
-
-          OUTPUT=$(python run.py  --providers example --count-tests --chunk-size $CHUNK_SIZE)
-
-          echo "Count tests output:"
-          echo "$OUTPUT"
+          OUTPUT=$(python run.py \
+            --providers example \
+            --count-tests \
+            --chunk-size $CHUNK_SIZE)
 
           NUM_CHUNKS=$(echo "$OUTPUT" | grep "num_chunks=" | cut -d'=' -f2)
           MATRIX=$(echo "$OUTPUT" | grep "matrix=" | cut -d'=' -f2-)
@@ -88,470 +79,191 @@ jobs:
           echo "chunk_size=$CHUNK_SIZE" >> $GITHUB_OUTPUT
           echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
 
-          echo "Number of chunks: $NUM_CHUNKS"
-          echo "Chunk size: $CHUNK_SIZE"
-          echo "Matrix: $MATRIX"
-
-  run-tests-windows:
-    name: Run Tests - Windows - Chunk ${{ matrix.chunk }}
+  run-tests:
+    name: ${{ matrix.os.name }} - Chunk ${{ matrix.chunk }}
     needs: prepare
-    runs-on: windows-latest
+    runs-on: ${{ matrix.os.runner }}
     strategy:
       matrix:
+        os:
+          - name: windows
+            runner: windows-latest
+            config: config_chrome_win.json
+          - name: linux
+            runner: ubuntu-latest
+            config: config_chrome_linux.json
+          - name: macos
+            runner: macos-latest
+            config: config_chrome_mac.json
         chunk: ${{ fromJson(needs.prepare.outputs.matrix).chunk }}
       fail-fast: false
-      max-parallel: 1
+      max-parallel: 6
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: Set up nodejs
-        uses: actions/setup-node@v4
-        with:
-          node-version: 'latest'
-
-      - name: Checkout main repository Dep.Tests
+      - name: Checkout Dep.Tests repository
         uses: actions/checkout@v4
         with:
           repository: ONLYOFFICE-data/Dep.Tests
           path: Dep.Tests
           token: ${{ secrets.READ_PAT }}
 
-      - name: Setup Git
-        shell: bash
+      - name: Setup Git credentials
         run: |
           git config --global user.name 'GitHub Actions'
           git config --global user.email 'actions@github.com'
           git config --global url."https://${{ secrets.READ_PAT }}@github.com/".insteadOf "https://github.com/"
 
-      - name: Init specific submodule
-        shell: bash
+      - name: Init puppeteer files submodule
         run: |
           cd Dep.Tests
           git submodule update --init --depth 1 puppeteer/files
-
-      - name: Set URL in config
-        shell: bash
-        run: |
-          URL_INPUT="${{ github.event.inputs.url }}"
-
-          if [[ "$URL_INPUT" == "release" ]]; then
-            URL="${{ secrets.URL_RELEASE }}"
-          elif [[ "$URL_INPUT" == "hotfix" ]]; then
-            URL="${{ secrets.URL_HOTFIX }}"
-          elif [[ "$URL_INPUT" == "develop" ]]; then
-            URL="${{ secrets.URL_DEVELOP }}"
-          else
-            URL="$URL_INPUT"
-          fi
-
-          node -e "
-            const fs = require('fs');
-            const filePath = 'Dep.Tests/puppeteer/config_chrome_win.json';
-            const config = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-
-            let url = '$URL';
-            if (!url.endsWith('/example')) {
-              url = url + '/example';
-            }
-            config.testOptions.url = url;
-
-            fs.writeFileSync(filePath, JSON.stringify(config, null, 2));
-          "
-
-      - name: Configure Report Portal
-        shell: bash
-        run: |
-          node -e "
-            const fs = require('fs');
-            const filePath = 'Dep.Tests/tools/report_portal/config.json';
-            const config = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-
-            config.api_key = 'test_9EE9Ay_ISY-jNRYHAJBplrYxFn6xmwklbOTrVpEAnU92z1sKchsPnDyzHvtz21Fz';
-            config.project_name = 'coldwaveuwu_personal';
-
-            fs.writeFileSync(filePath, JSON.stringify(config, null, 2));
-          "
-
-      - name: Install dependencies
-        shell: bash
-        run: |
-          cd Dep.Tests/puppeteer/engine
-          npm install
-
-      - name: Run tests chunk
-        shell: bash
-        run: |
-          cd Dep.Tests/puppeteer/engine
-
-          CHUNK_SIZE="${{ needs.prepare.outputs.chunk_size }}"
-          CHUNK_ID="${{ matrix.chunk }}"
-
-          python run.py \
-            --chunk-id $CHUNK_ID \
-            --chunk-size $CHUNK_SIZE \
-            --disable_animation \
-            --config_params puppeteerOptions.headless=true \
-            --connect_portal 2>&1 | tee console_output.txt
-
-          UUID=$(grep "RP_LAUNCH_UUID=" console_output.txt | tail -n 1 | cut -d'=' -f2)
-
-          if [ -n "$UUID" ]; then
-            echo "$UUID" > launch_uuid.txt
-            echo "Extracted Report Portal Launch UUID: $UUID"
-          else
-            echo "Warning: No Report Portal Launch UUID found"
-          fi
-
-      - name: Upload Launch UUID
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: launch-uuid-windows-chunk-${{ matrix.chunk }}
-          path: Dep.Tests/puppeteer/engine/launch_uuid.txt
-
-      - name: Upload artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: out-windows-example-chunk-${{ matrix.chunk }}
-          path: Dep.Tests/puppeteer/out
-
-  run-tests-linux:
-    name: Run Tests - Linux - Chunk ${{ matrix.chunk }}
-    needs: prepare
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        chunk: ${{ fromJson(needs.prepare.outputs.matrix).chunk }}
-      fail-fast: false
-      max-parallel: 1
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: Set up nodejs
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 'latest'
 
-      - name: Checkout main repository Dep.Tests
-        uses: actions/checkout@v4
+      - name: Install npm dependencies
+        working-directory: Dep.Tests/puppeteer/engine
+        run: npm install
+
+      - name: Cache Puppeteer browsers
+        id: cache-puppeteer
+        uses: actions/cache@v4
         with:
-          repository: ONLYOFFICE-data/Dep.Tests
-          path: Dep.Tests
-          token: ${{ secrets.READ_PAT }}
+          path: ~/.cache/puppeteer
+          key: ${{ runner.os }}-puppeteer-chrome-${{ hashFiles('Dep.Tests/puppeteer/engine/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-puppeteer-chrome-
 
-      - name: Setup Git
+      - name: Install Chrome for Puppeteer
+        if: steps.cache-puppeteer.outputs.cache-hit != 'true'
         shell: bash
         run: |
-          git config --global user.name 'GitHub Actions'
-          git config --global user.email 'actions@github.com'
-          git config --global url."https://${{ secrets.READ_PAT }}@github.com/".insteadOf "https://github.com/"
+          cd Dep.Tests/puppeteer/engine
+          npx puppeteer browsers install chrome
 
-      - name: Init specific submodule
-        shell: bash
-        run: |
-          cd Dep.Tests
-          git submodule update --init --depth 1 puppeteer/files
-
-      - name: Set URL in config
+      - name: Configure test URL
         shell: bash
         run: |
           URL_INPUT="${{ github.event.inputs.url }}"
 
-          if [[ "$URL_INPUT" == "release" ]]; then
-            URL="${{ secrets.URL_RELEASE }}"
-          elif [[ "$URL_INPUT" == "hotfix" ]]; then
-            URL="${{ secrets.URL_HOTFIX }}"
-          elif [[ "$URL_INPUT" == "develop" ]]; then
-            URL="${{ secrets.URL_DEVELOP }}"
-          else
-            URL="$URL_INPUT"
-          fi
+          case "$URL_INPUT" in
+            release) URL="${{ secrets.URL_RELEASE }}" ;;
+            hotfix) URL="${{ secrets.URL_HOTFIX }}" ;;
+            develop) URL="${{ secrets.URL_DEVELOP }}" ;;
+            *) URL="$URL_INPUT" ;;
+          esac
+
+          [[ "$URL" != */example ]] && URL="${URL}/example"
 
           node -e "
             const fs = require('fs');
-            const filePath = 'Dep.Tests/puppeteer/config_chrome_linux.json';
-            const config = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-
-            let url = '$URL';
-            if (!url.endsWith('/example')) {
-              url = url + '/example';
-            }
-            config.testOptions.url = url;
-
-            fs.writeFileSync(filePath, JSON.stringify(config, null, 2));
-          "
-
-      - name: Configure Report Portal
-        shell: bash
-        run: |
-          node -e "
-            const fs = require('fs');
-            const filePath = 'Dep.Tests/tools/report_portal/config.json';
-            const config = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-
-            config.api_key = 'test_9EE9Ay_ISY-jNRYHAJBplrYxFn6xmwklbOTrVpEAnU92z1sKchsPnDyzHvtz21Fz';
-            config.project_name = 'coldwaveuwu_personal';
-
-            fs.writeFileSync(filePath, JSON.stringify(config, null, 2));
-          "
-
-      - name: Set headless mode for linux
-        shell: bash
-        run: |
-          node -e "
-            const fs = require('fs');
-            const filePath = 'Dep.Tests/puppeteer/config_chrome_linux.json';
-            const config = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-
+            const config = JSON.parse(fs.readFileSync('Dep.Tests/puppeteer/${{ matrix.os.config }}', 'utf8'));
+            config.testOptions.url = '$URL';
             config.puppeteerOptions.headless = true;
-
-            fs.writeFileSync(filePath, JSON.stringify(config, null, 2));
+            fs.writeFileSync('Dep.Tests/puppeteer/${{ matrix.os.config }}', JSON.stringify(config, null, 2));
           "
 
-      - name: Install dependencies
+      - name: Configure Report Portal
         shell: bash
         run: |
-          cd Dep.Tests/puppeteer/engine
-          npm install
+          node -e "
+            const fs = require('fs');
+            const config = JSON.parse(fs.readFileSync('Dep.Tests/tools/report_portal/config.json', 'utf8'));
+            config.api_key = 'test_dpj1-SyRRGWSd9Jqie_-DieY4PFerARKwrKlmjAaVgMsjBmmAOAsKo16dDrNb2q6';
+            config.project_name = 'coldwaveuwu_personal';
+            config.launch_name = 'GitHub Actions - docsserver - ${{ matrix.os.name }}';
+            fs.writeFileSync('Dep.Tests/tools/report_portal/config.json', JSON.stringify(config, null, 2));
+          "
 
-      - name: Configure Puppeteer sandbox
-        shell: bash
+      - name: Configure Chrome sandbox (Linux only)
+        if: runner.os == 'Linux'
         run: |
-          CHROME_VERSION=$(ls ~/.cache/puppeteer/chrome/linux-* -d 2>/dev/null | head -n 1 | xargs basename 2>/dev/null || echo "")
-          if [ -z "$CHROME_VERSION" ]; then
-            echo "Chrome not installed yet, will be configured after npm install"
-          else
-            cd ~/.cache/puppeteer/chrome/$CHROME_VERSION/chrome-linux64/
+          CHROME_DIR=$(find ~/.cache/puppeteer/chrome -name "linux-*" -type d 2>/dev/null | head -n 1)
+          if [ -n "$CHROME_DIR" ]; then
+            cd "$CHROME_DIR/chrome-linux64/"
             sudo chown root:root chrome_sandbox
             sudo chmod 4755 chrome_sandbox
             sudo cp -p chrome_sandbox /usr/local/sbin/chrome-devel-sandbox
+            echo "CHROME_DEVEL_SANDBOX=/usr/local/sbin/chrome-devel-sandbox" >> $GITHUB_ENV
           fi
-          echo "CHROME_DEVEL_SANDBOX=/usr/local/sbin/chrome-devel-sandbox" >> $GITHUB_ENV
 
-      - name: Run tests chunk
+      - name: Run tests chunk ${{ matrix.chunk }}
         shell: bash
+        working-directory: Dep.Tests/puppeteer/engine
         run: |
-          cd Dep.Tests/puppeteer/engine
-
-          CHUNK_SIZE="${{ needs.prepare.outputs.chunk_size }}"
-          CHUNK_ID="${{ matrix.chunk }}"
-
-          python run.py \
-            --chunk-id $CHUNK_ID \
-            --chunk-size $CHUNK_SIZE \
+          OUTPUT=$(python run.py \
+            --providers example \
+            --chunk-id ${{ matrix.chunk }} \
+            --chunk-size ${{ needs.prepare.outputs.chunk_size }} \
             --disable_animation \
             --config_params puppeteerOptions.headless=true \
-            --connect_portal 2>&1 | tee console_output.txt
+            --connect_portal 2>&1)
 
-          UUID=$(grep "RP_LAUNCH_UUID=" console_output.txt | tail -n 1 | cut -d'=' -f2)
+          echo "$OUTPUT"
+
+          UUID=$(echo "$OUTPUT" | grep -oP 'RP_LAUNCH_UUID=\K[^\s]+' | tail -n 1 || echo "")
 
           if [ -n "$UUID" ]; then
             echo "$UUID" > launch_uuid.txt
-            echo "Extracted Report Portal Launch UUID: $UUID"
           else
-            echo "Warning: No Report Portal Launch UUID found"
+            echo "Warning: No Launch UUID found"
           fi
 
       - name: Upload Launch UUID
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: launch-uuid-linux-chunk-${{ matrix.chunk }}
+          name: launch-uuid-${{ matrix.os.name }}-chunk-${{ matrix.chunk }}
           path: Dep.Tests/puppeteer/engine/launch_uuid.txt
+          retention-days: 1
 
-      - name: Upload artifacts
+      - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: out-linux-example-chunk-${{ matrix.chunk }}
+          name: results-${{ matrix.os.name }}-chunk-${{ matrix.chunk }}
           path: Dep.Tests/puppeteer/out
+          retention-days: 2
 
-  run-tests-macos:
-    name: Run Tests - macOS - Chunk ${{ matrix.chunk }}
-    needs: prepare
-    runs-on: macos-latest
-    strategy:
-      matrix:
-        chunk: ${{ fromJson(needs.prepare.outputs.matrix).chunk }}
-      fail-fast: false
-      max-parallel: 1
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: Set up nodejs
-        uses: actions/setup-node@v4
-        with:
-          node-version: 'latest'
-
-      - name: Checkout main repository Dep.Tests
-        uses: actions/checkout@v4
-        with:
-          repository: ONLYOFFICE-data/Dep.Tests
-          path: Dep.Tests
-          token: ${{ secrets.READ_PAT }}
-
-      - name: Setup Git
-        shell: bash
-        run: |
-          git config --global user.name 'GitHub Actions'
-          git config --global user.email 'actions@github.com'
-          git config --global url."https://${{ secrets.READ_PAT }}@github.com/".insteadOf "https://github.com/"
-
-      - name: Init specific submodule
-        shell: bash
-        run: |
-          cd Dep.Tests
-          git submodule update --init --depth 1 puppeteer/files
-
-      - name: Set URL in config
-        shell: bash
-        run: |
-          URL_INPUT="${{ github.event.inputs.url }}"
-
-          if [[ "$URL_INPUT" == "release" ]]; then
-            URL="${{ secrets.URL_RELEASE }}"
-          elif [[ "$URL_INPUT" == "hotfix" ]]; then
-            URL="${{ secrets.URL_HOTFIX }}"
-          elif [[ "$URL_INPUT" == "develop" ]]; then
-            URL="${{ secrets.URL_DEVELOP }}"
-          else
-            URL="$URL_INPUT"
-          fi
-
-          node -e "
-            const fs = require('fs');
-            const filePath = 'Dep.Tests/puppeteer/config_chrome_mac.json';
-            const config = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-
-            let url = '$URL';
-            if (!url.endsWith('/example')) {
-              url = url + '/example';
-            }
-            config.testOptions.url = url;
-
-            fs.writeFileSync(filePath, JSON.stringify(config, null, 2));
-          "
-
-      - name: Configure Report Portal
-        shell: bash
-        run: |
-          node -e "
-            const fs = require('fs');
-            const filePath = 'Dep.Tests/tools/report_portal/config.json';
-            const config = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-
-            config.api_key = 'test_9EE9Ay_ISY-jNRYHAJBplrYxFn6xmwklbOTrVpEAnU92z1sKchsPnDyzHvtz21Fz';
-            config.project_name = 'coldwaveuwu_personal';
-
-            fs.writeFileSync(filePath, JSON.stringify(config, null, 2));
-          "
-
-      - name: Install dependencies
-        shell: bash
-        run: |
-          cd Dep.Tests/puppeteer/engine
-          npm install
-
-      - name: Run tests chunk
-        shell: bash
-        run: |
-          cd Dep.Tests/puppeteer/engine
-
-          CHUNK_SIZE="${{ needs.prepare.outputs.chunk_size }}"
-          CHUNK_ID="${{ matrix.chunk }}"
-
-          python run.py \
-            --chunk-id $CHUNK_ID \
-            --chunk-size $CHUNK_SIZE \
-            --disable_animation \
-            --config_params puppeteerOptions.headless=true \
-            --connect_portal 2>&1 | tee console_output.txt
-
-          UUID=$(grep "RP_LAUNCH_UUID=" console_output.txt | tail -n 1 | cut -d'=' -f2)
-
-          if [ -n "$UUID" ]; then
-            echo "$UUID" > launch_uuid.txt
-            echo "Extracted Report Portal Launch UUID: $UUID"
-          else
-            echo "Warning: No Report Portal Launch UUID found"
-          fi
-
-      - name: Upload Launch UUID
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: launch-uuid-macos-chunk-${{ matrix.chunk }}
-          path: Dep.Tests/puppeteer/engine/launch_uuid.txt
-
-      - name: Upload artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: out-macos-example-chunk-${{ matrix.chunk }}
-          path: Dep.Tests/puppeteer/out
-
-  collect-launch-uuids:
+  collect-uuids:
     name: Collect Launch UUIDs
-    needs: [prepare, run-tests-windows, run-tests-linux, run-tests-macos]
+    needs: [prepare, run-tests]
     runs-on: ubuntu-latest
     if: always()
     outputs:
-      launch_uuids: ${{ steps.collect-uuids.outputs.launch_uuids }}
+      launch_uuids: ${{ steps.collect.outputs.launch_uuids }}
 
     steps:
-      - name: Download all UUID artifacts
+      - name: Download UUID artifacts
         uses: actions/download-artifact@v4
         with:
           pattern: launch-uuid-*
-          path: launch-uuids
+          path: uuids
 
       - name: Collect UUIDs
-        id: collect-uuids
-        shell: bash
+        id: collect
         run: |
           UUIDS=()
 
-          for file in launch-uuids/*/launch_uuid.txt; do
-            if [ -f "$file" ]; then
-              UUID=$(cat "$file" | tr -d '[:space:]')
-              if [ -n "$UUID" ]; then
-                UUIDS+=("$UUID")
-              fi
-            fi
+          for file in uuids/*/launch_uuid.txt; do
+            [ -f "$file" ] || continue
+            UUID=$(tr -d '[:space:]' < "$file")
+            [ -n "$UUID" ] && UUIDS+=("$UUID")
           done
 
           UNIQUE_UUIDS=($(printf '%s\n' "${UUIDS[@]}" | sort -u))
-
-          echo "Found ${#UNIQUE_UUIDS[@]} unique launch UUIDs:"
-          printf '%s\n' "${UNIQUE_UUIDS[@]}"
 
           if [ ${#UNIQUE_UUIDS[@]} -eq 0 ]; then
             echo "launch_uuids=[]" >> $GITHUB_OUTPUT
           else
             UUIDS_JSON=$(printf '%s\n' "${UNIQUE_UUIDS[@]}" | jq -R . | jq -sc .)
-            echo "Generated JSON: $UUIDS_JSON"
             {
               echo "launch_uuids<<EOF"
               echo "$UUIDS_JSON"
@@ -561,81 +273,54 @@ jobs:
 
   merge-launches:
     name: Merge Report Portal Launches
-    needs: [collect-launch-uuids]
+    needs: [collect-uuids]
     runs-on: ubuntu-latest
     if: always()
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: Checkout main repository Dep.Tests
+      - name: Checkout Dep.Tests repository
         uses: actions/checkout@v4
         with:
           repository: ONLYOFFICE-data/Dep.Tests
           path: Dep.Tests
           token: ${{ secrets.READ_PAT }}
 
-      - name: Configure Report Portal
-        shell: bash
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Configure and Merge Launches
+        working-directory: Dep.Tests/tools/report_portal
         run: |
           node -e "
             const fs = require('fs');
-            const filePath = 'Dep.Tests/tools/report_portal/config.json';
-            const config = JSON.parse(fs.readFileSync(filePath, 'utf8'));
-
-            config.api_key = 'test_9EE9Ay_ISY-jNRYHAJBplrYxFn6xmwklbOTrVpEAnU92z1sKchsPnDyzHvtz21Fz';
+            const config = JSON.parse(fs.readFileSync('config.json', 'utf8'));
+            config.api_key = 'test_dpj1-SyRRGWSd9Jqie_-DieY4PFerARKwrKlmjAaVgMsjBmmAOAsKo16dDrNb2q6';
             config.project_name = 'coldwaveuwu_personal';
-
-            fs.writeFileSync(filePath, JSON.stringify(config, null, 2));
+            fs.writeFileSync('config.json', JSON.stringify(config, null, 2));
           "
 
-      - name: Merge Report Portal Launches
-        shell: bash
-        run: |
-          cd Dep.Tests/tools/report_portal
-
-          UUIDS='${{ needs.collect-launch-uuids.outputs.launch_uuids }}'
-
-          echo "=== Debug Info ==="
-          echo "Raw UUIDS value: '$UUIDS'"
-          echo "UUIDS length: ${#UUIDS}"
-          echo "=================="
+          UUIDS='${{ needs.collect-uuids.outputs.launch_uuids }}'
 
           if [ "$UUIDS" = "[]" ] || [ -z "$UUIDS" ]; then
-            echo "No launch UUIDs found to merge"
+            echo "No launches to merge"
             exit 0
           fi
 
           if ! echo "$UUIDS" | jq empty 2>/dev/null; then
-            echo "Error: Invalid JSON format in launch_uuids"
-            echo "Received: $UUIDS"
+            echo "Error: Invalid JSON format"
             exit 1
           fi
 
           UUID_COUNT=$(echo "$UUIDS" | jq '. | length')
-          echo "Found $UUID_COUNT UUIDs in JSON array"
 
           if [ "$UUID_COUNT" -eq 0 ]; then
-            echo "No UUIDs to merge (empty array)"
+            echo "Empty UUID list"
             exit 0
           fi
 
-          UUIDS_ARRAY=$(echo "$UUIDS" | jq -r '.[]')
-
-          echo "Merging Report Portal launches..."
-          echo "UUIDs to merge:"
-          echo "$UUIDS_ARRAY"
-          echo ""
-
           python merge_launches.py \
-            --launch-uuids $UUIDS_ARRAY \
-            --name "Merged - {system}" \
+            --launch-uuids $(echo "$UUIDS" | jq -r '.[]') \
+            --name "Merged - docsserver - {system}" \
             --merge-type DEEP
-
-          echo "Report Portal launches merged successfully"
