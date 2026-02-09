@@ -57,7 +57,7 @@ jobs:
         run: |
           CHUNK_SIZE="${{ github.event.inputs.chunk_size }}"
 
-          OUTPUT=$(python run.py tests/desktop/pdf/copy_paste_for_pages \
+          OUTPUT=$(python run.py \
             --providers example \
             --count-tests \
             --chunk-size $CHUNK_SIZE)
@@ -134,7 +134,7 @@ jobs:
             *) URL="$URL_INPUT" ;;
           esac
 
-          [[ "$URL" != */example ]] && URL="${URL}/example"
+          [[ "$URL" != */example ]] && URL="${URL%/}/example"
 
           node -e "
             const fs = require('fs');
@@ -173,7 +173,7 @@ jobs:
         shell: bash
         working-directory: Dep.Tests/puppeteer/engine
         run: |
-          python run.py tests/desktop/pdf/copy_paste_for_pages \
+          python run.py \
             --providers example \
             --chunk-id ${{ matrix.chunk }} \
             --chunk-size ${{ needs.prepare.outputs.chunk_size }} \
@@ -278,7 +278,7 @@ jobs:
             *) URL="$URL_INPUT" ;;
           esac
 
-          [[ "$URL" != */example ]] && URL="${URL}/example"
+          [[ "$URL" != */example ]] && URL="${URL%/}/example"
 
           node -e "
             const fs = require('fs');
@@ -317,7 +317,7 @@ jobs:
         shell: bash
         working-directory: Dep.Tests/puppeteer/engine
         run: |
-          python run.py tests/desktop/pdf/copy_paste_for_pages \
+          python run.py \
             --providers example \
             --chunk-id ${{ matrix.chunk }} \
             --chunk-size ${{ needs.prepare.outputs.chunk_size }} \
@@ -422,7 +422,7 @@ jobs:
             *) URL="$URL_INPUT" ;;
           esac
 
-          [[ "$URL" != */example ]] && URL="${URL}/example"
+          [[ "$URL" != */example ]] && URL="${URL%/}/example"
 
           node -e "
             const fs = require('fs');
@@ -449,7 +449,7 @@ jobs:
         shell: bash
         working-directory: Dep.Tests/puppeteer/engine
         run: |
-          python run.py tests/desktop/pdf/copy_paste_for_pages \
+          python run.py \
             --providers example \
             --chunk-id ${{ matrix.chunk }} \
             --chunk-size ${{ needs.prepare.outputs.chunk_size }} \
@@ -579,4 +579,5 @@ jobs:
           python merge_launches.py \
             --launch-uuids $UUID_LIST \
             --name "Merged - docsserver - {system}" \
-            --merge-type DEEP
+            --merge-type DEEP \
+            --description " "
