@@ -35,17 +35,7 @@ jobs:
           repository: ONLYOFFICE-data/Dep.Tests
           path: Dep.Tests
           token: ${{ secrets.READ_PAT }}
-
-      - name: Setup Git credentials
-        run: |
-          git config --global user.name 'GitHub Actions'
-          git config --global user.email 'actions@github.com'
-          git config --global url."https://${{ secrets.READ_PAT }}@github.com/".insteadOf "https://github.com/"
-
-      - name: Init puppeteer files submodule
-        run: |
-          cd Dep.Tests
-          git submodule update --init --depth 1 puppeteer/files
+          submodules: recursive
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -100,17 +90,7 @@ jobs:
           repository: ONLYOFFICE-data/Dep.Tests
           path: Dep.Tests
           token: ${{ secrets.READ_PAT }}
-
-      - name: Setup Git credentials
-        run: |
-          git config --global user.name 'GitHub Actions'
-          git config --global user.email 'actions@github.com'
-          git config --global url."https://${{ secrets.READ_PAT }}@github.com/".insteadOf "https://github.com/"
-
-      - name: Init puppeteer files submodule
-        run: |
-          cd Dep.Tests
-          git submodule update --init --depth 1 puppeteer/files
+          submodules: recursive
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -254,17 +234,7 @@ jobs:
           repository: ONLYOFFICE-data/Dep.Tests
           path: Dep.Tests
           token: ${{ secrets.READ_PAT }}
-
-      - name: Setup Git credentials
-        run: |
-          git config --global user.name 'GitHub Actions'
-          git config --global user.email 'actions@github.com'
-          git config --global url."https://${{ secrets.READ_PAT }}@github.com/".insteadOf "https://github.com/"
-
-      - name: Init puppeteer files submodule
-        run: |
-          cd Dep.Tests
-          git submodule update --init --depth 1 puppeteer/files
+          submodules: recursive
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -408,17 +378,7 @@ jobs:
           repository: ONLYOFFICE-data/Dep.Tests
           path: Dep.Tests
           token: ${{ secrets.READ_PAT }}
-
-      - name: Setup Git credentials
-        run: |
-          git config --global user.name 'GitHub Actions'
-          git config --global user.email 'actions@github.com'
-          git config --global url."https://${{ secrets.READ_PAT }}@github.com/".insteadOf "https://github.com/"
-
-      - name: Init puppeteer files submodule
-        run: |
-          cd Dep.Tests
-          git submodule update --init --depth 1 puppeteer/files
+          submodules: recursive
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -580,6 +540,7 @@ jobs:
           repository: ONLYOFFICE-data/Dep.Tests
           path: Dep.Tests
           token: ${{ secrets.READ_PAT }}
+          submodules: recursive
 
       - name: Set up Python
         uses: actions/setup-python@v5
