@@ -1,0 +1,55 @@
+name: 'Collect Launch UUIDs'
+description: 'Collects and processes launch UUIDs for a specific OS'
+
+inputs:
+  os-name:
+    description: 'Operating system name (windows, linux, macos)'
+    required: true
+
+outputs:
+  launch_uuids:
+    description: 'JSON array of collected UUIDs'
+    value: ${{ steps.collect.outputs.launch_uuids }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Download UUID artifacts
+      uses: actions/download-artifact@v4
+      with:
+        pattern: launch-uuid-${{ inputs.os-name }}-*
+        path: uuids
+
+    - name: Collect ${{ inputs.os-name }} UUIDs
+      id: collect
+      shell: bash
+      run: |
+        UUIDS=""
+
+        for file in uuids/launch-uuid-${{ inputs.os-name }}-*/launch_uuid.txt; do
+          [ -f "$file" ] || continue
+
+          UUID=$(tr -d '[:space:]' < "$file")
+
+          if [ -n "$UUID" ]; then
+            if [ -n "$UUIDS" ]; then
+              UUIDS="$UUIDS,$UUID"
+            else
+              UUIDS="$UUID"
+            fi
+          fi
+        done
+
+        if [ -n "$UUIDS" ]; then
+          IFS=',' read -ra UUID_ARRAY <<< "$UUIDS"
+          UNIQUE_UUIDS=($(printf '%s\n' "${UUID_ARRAY[@]}" | sort -u))
+          UUIDS_JSON=$(printf '%s\n' "${UNIQUE_UUIDS[@]}" | jq -R . | jq -sc .)
+        else
+          UUIDS_JSON="[]"
+        fi
+
+        {
+          echo "launch_uuids<<EOF"
+          echo "$UUIDS_JSON"
+          echo "EOF"
+        } >> $GITHUB_OUTPUT

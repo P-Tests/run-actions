@@ -216,9 +216,46 @@ jobs:
           path: Dep.Tests/puppeteer/out
           retention-days: 2
 
+  collect-uuids-windows:
+    name: Collect Windows UUIDs
+    needs: [prepare, run-tests-windows]
+    runs-on: ubuntu-latest
+    if: "!cancelled()"
+    outputs:
+      launch_uuids: ${{ steps.collect.outputs.launch_uuids }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Collect UUIDs
+        id: collect
+        uses: ./.github/actions/collect-uuids
+        with:
+          os-name: windows
+
+  merge-launches-windows:
+    name: Merge Windows Launches
+    needs: [collect-uuids-windows]
+    runs-on: ubuntu-latest
+    if: "!cancelled()"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Merge Launches
+        uses: ./.github/actions/merge-launches
+        with:
+          os-name: windows
+          launch-uuids: ${{ needs.collect-uuids-windows.outputs.launch_uuids }}
+          api-key: test_dpj1-SyRRGWSd9Jqie_-DieY4PFerARKwrKlmjAaVgMsjBmmAOAsKo16dDrNb2q6
+          project-name: coldwaveuwu_personal
+          github-token: ${{ secrets.READ_PAT }}
+
   run-tests-linux:
     name: Linux - Chunk ${{ matrix.chunk }}
-    needs: [prepare, run-tests-windows]
+    needs: [prepare, merge-launches-windows]
     if: "!cancelled()"
     runs-on: ubuntu-latest
     strategy:
@@ -360,9 +397,46 @@ jobs:
           path: Dep.Tests/puppeteer/out
           retention-days: 2
 
+  collect-uuids-linux:
+    name: Collect Linux UUIDs
+    needs: [prepare, run-tests-linux]
+    runs-on: ubuntu-latest
+    if: "!cancelled()"
+    outputs:
+      launch_uuids: ${{ steps.collect.outputs.launch_uuids }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Collect UUIDs
+        id: collect
+        uses: ./.github/actions/collect-uuids
+        with:
+          os-name: linux
+
+  merge-launches-linux:
+    name: Merge Linux Launches
+    needs: [collect-uuids-linux]
+    runs-on: ubuntu-latest
+    if: "!cancelled()"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Merge Launches
+        uses: ./.github/actions/merge-launches
+        with:
+          os-name: linux
+          launch-uuids: ${{ needs.collect-uuids-linux.outputs.launch_uuids }}
+          api-key: test_dpj1-SyRRGWSd9Jqie_-DieY4PFerARKwrKlmjAaVgMsjBmmAOAsKo16dDrNb2q6
+          project-name: coldwaveuwu_personal
+          github-token: ${{ secrets.READ_PAT }}
+
   run-tests-macos:
     name: macOS - Chunk ${{ matrix.chunk }}
-    needs: [prepare, run-tests-linux]
+    needs: [prepare, merge-launches-linux]
     if: "!cancelled()"
     runs-on: macos-latest
     strategy:
@@ -492,126 +566,39 @@ jobs:
           path: Dep.Tests/puppeteer/out
           retention-days: 2
 
-  collect-uuids:
-    name: Collect Launch UUIDs
-    needs: [prepare, run-tests-windows, run-tests-linux, run-tests-macos]
+  collect-uuids-macos:
+    name: Collect macOS UUIDs
+    needs: [prepare, run-tests-macos]
     runs-on: ubuntu-latest
     if: "!cancelled()"
     outputs:
-      launch_uuids_windows: ${{ steps.collect.outputs.launch_uuids_windows }}
-      launch_uuids_linux: ${{ steps.collect.outputs.launch_uuids_linux }}
-      launch_uuids_macos: ${{ steps.collect.outputs.launch_uuids_macos }}
+      launch_uuids: ${{ steps.collect.outputs.launch_uuids }}
 
     steps:
-      - name: Download UUID artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: launch-uuid-*
-          path: uuids
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Collect UUIDs by system
+      - name: Collect UUIDs
         id: collect
-        run: |
-          declare -A UUIDS_BY_OS
-          UUIDS_BY_OS[windows]=""
-          UUIDS_BY_OS[linux]=""
-          UUIDS_BY_OS[macos]=""
+        uses: ./.github/actions/collect-uuids
+        with:
+          os-name: macos
 
-          for file in uuids/launch-uuid-*/launch_uuid.txt; do
-            [ -f "$file" ] || continue
-
-            dirname=$(basename $(dirname "$file"))
-
-            if [[ "$dirname" =~ launch-uuid-([^-]+)- ]]; then
-              OS_NAME="${BASH_REMATCH[1]}"
-              UUID=$(tr -d '[:space:]' < "$file")
-
-              if [ -n "$UUID" ]; then
-                if [ -n "${UUIDS_BY_OS[$OS_NAME]}" ]; then
-                  UUIDS_BY_OS[$OS_NAME]="${UUIDS_BY_OS[$OS_NAME]},$UUID"
-                else
-                  UUIDS_BY_OS[$OS_NAME]="$UUID"
-                fi
-              fi
-            fi
-          done
-
-          for os in windows linux macos; do
-            if [ -n "${UUIDS_BY_OS[$os]}" ]; then
-              IFS=',' read -ra UUID_ARRAY <<< "${UUIDS_BY_OS[$os]}"
-              UNIQUE_UUIDS=($(printf '%s\n' "${UUID_ARRAY[@]}" | sort -u))
-              UUIDS_JSON=$(printf '%s\n' "${UNIQUE_UUIDS[@]}" | jq -R . | jq -sc .)
-            else
-              UUIDS_JSON="[]"
-            fi
-
-            {
-              echo "launch_uuids_${os}<<EOF"
-              echo "$UUIDS_JSON"
-              echo "EOF"
-            } >> $GITHUB_OUTPUT
-          done
-
-  merge-launches:
-    name: Merge ${{ matrix.os }} Launches
-    needs: [collect-uuids]
+  merge-launches-macos:
+    name: Merge macOS Launches
+    needs: [collect-uuids-macos]
     runs-on: ubuntu-latest
     if: "!cancelled()"
-    strategy:
-      matrix:
-        os: [windows, linux, macos]
-      fail-fast: false
 
     steps:
-      - name: Checkout Dep.Tests repository
+      - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Merge Launches
+        uses: ./.github/actions/merge-launches
         with:
-          repository: ONLYOFFICE-data/Dep.Tests
-          path: Dep.Tests
-          token: ${{ secrets.READ_PAT }}
-          submodules: recursive
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: Configure and Merge Launches
-        working-directory: Dep.Tests/tools/report_portal
-        run: |
-          node -e "
-            const fs = require('fs');
-            const config = JSON.parse(fs.readFileSync('config.json', 'utf8'));
-            config.api_key = 'test_dpj1-SyRRGWSd9Jqie_-DieY4PFerARKwrKlmjAaVgMsjBmmAOAsKo16dDrNb2q6';
-            config.project_name = 'coldwaveuwu_personal';
-            fs.writeFileSync('config.json', JSON.stringify(config, null, 2));
-          "
-
-          UUIDS='${{ needs.collect-uuids.outputs[format('launch_uuids_{0}', matrix.os)] }}'
-
-          if [ -z "$UUIDS" ] || [ "$UUIDS" = "[]" ] || [ "$UUIDS" = "null" ]; then
-            echo "No UUIDs for ${{ matrix.os }}, skipping merge"
-            exit 0
-          fi
-
-          if ! echo "$UUIDS" | jq empty 2>/dev/null; then
-            echo "Invalid JSON format for ${{ matrix.os }} UUIDs"
-            exit 1
-          fi
-
-          UUID_COUNT=$(echo "$UUIDS" | jq '. | length')
-
-          if [ "$UUID_COUNT" -le 1 ]; then
-            echo "Only $UUID_COUNT UUID(s) for ${{ matrix.os }}, merge not needed"
-            exit 0
-          fi
-
-          UUID_LIST=$(echo "$UUIDS" | jq -r '.[]' | tr '\n' ' ')
-
-          echo "Merging $UUID_COUNT launches for ${{ matrix.os }}"
-
-          python merge_launches.py \
-            --launch-uuids $UUID_LIST \
-            --name "Merged Launch - docsserver - ${{ matrix.os }}" \
-            --merge-type DEEP \
-            --description " "
+          os-name: macos
+          launch-uuids: ${{ needs.collect-uuids-macos.outputs.launch_uuids }}
+          api-key: test_dpj1-SyRRGWSd9Jqie_-DieY4PFerARKwrKlmjAaVgMsjBmmAOAsKo16dDrNb2q6
+          project-name: coldwaveuwu_personal
+          github-token: ${{ secrets.READ_PAT }}
