@@ -28,50 +28,21 @@ jobs:
     name: Prepare Test Matrix
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
-      num_chunks: ${{ steps.set-matrix.outputs.num_chunks }}
-      chunk_size: ${{ steps.set-matrix.outputs.chunk_size }}
+      matrix: ${{ steps.prepare.outputs.matrix }}
+      num_chunks: ${{ steps.prepare.outputs.num_chunks }}
+      chunk_size: ${{ steps.prepare.outputs.chunk_size }}
 
     steps:
-      - name: Checkout Dep.Tests repository
+      - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Prepare test matrix
+        id: prepare
+        uses: ./.github/actions/puppeteer-prepare
         with:
-          repository: ONLYOFFICE-data/Dep.Tests
-          path: Dep.Tests
-          token: ${{ secrets.READ_PAT }}
-          submodules: recursive
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 'latest'
-
-      - name: Install npm dependencies
-        working-directory: Dep.Tests/puppeteer/engine
-        run: npm ci --prefer-offline --no-audit
-
-      - name: Count tests and generate matrix
-        id: set-matrix
-        working-directory: Dep.Tests/puppeteer/engine
-        run: |
-          CHUNK_SIZE="${{ github.event.inputs.chunk_size }}"
-
-          OUTPUT=$(python run.py \
-            --providers example \
-            --count-tests \
-            --chunk-size $CHUNK_SIZE)
-
-          NUM_CHUNKS=$(echo "$OUTPUT" | grep "num_chunks=" | cut -d'=' -f2)
-          MATRIX=$(echo "$OUTPUT" | grep "matrix=" | cut -d'=' -f2-)
-
-          echo "num_chunks=$NUM_CHUNKS" >> $GITHUB_OUTPUT
-          echo "chunk_size=$CHUNK_SIZE" >> $GITHUB_OUTPUT
-          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+          provider: example
+          chunk_size: ${{ github.event.inputs.chunk_size }}
+          read_pat: ${{ secrets.READ_PAT }}
 
   run-tests-windows:
     name: Windows - Chunk ${{ matrix.chunk }}
@@ -82,141 +53,26 @@ jobs:
       matrix:
         chunk: ${{ fromJson(needs.prepare.outputs.matrix).chunk }}
       fail-fast: false
-    env:
-      OS_NAME: windows
-      OS_CONFIG: config_chrome_win.json
 
     steps:
-      - name: Checkout Dep.Tests repository
+      - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Run tests
+        uses: ./.github/actions/puppeteer-run-chunk
         with:
-          repository: ONLYOFFICE-data/Dep.Tests
-          path: Dep.Tests
-          token: ${{ secrets.READ_PAT }}
-          submodules: recursive
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 'latest'
-
-      - name: Install npm dependencies
-        working-directory: Dep.Tests/puppeteer/engine
-        run: npm install
-
-      - name: Cache Puppeteer browsers
-        id: cache-puppeteer
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/puppeteer
-          key: ${{ runner.os }}-puppeteer-chrome-${{ hashFiles('Dep.Tests/puppeteer/engine/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-puppeteer-chrome-
-
-      - name: Install Chrome for Puppeteer
-        if: steps.cache-puppeteer.outputs.cache-hit != 'true'
-        shell: bash
-        run: |
-          cd Dep.Tests/puppeteer/engine
-          npx puppeteer browsers install chrome
-
-      - name: Configure test URL
-        shell: bash
-        run: |
-          URL_INPUT="${{ github.event.inputs.url }}"
-
-          case "$URL_INPUT" in
-            release) URL="${{ secrets.URL_RELEASE }}" ;;
-            hotfix) URL="${{ secrets.URL_HOTFIX }}" ;;
-            develop) URL="${{ secrets.URL_DEVELOP }}" ;;
-            *) URL="$URL_INPUT" ;;
-          esac
-
-          [[ "$URL" != */example ]] && URL="${URL%/}/example"
-
-          node -e "
-            const fs = require('fs');
-            const config = JSON.parse(fs.readFileSync('Dep.Tests/puppeteer/${{ env.OS_CONFIG }}', 'utf8'));
-            config.testOptions.url = '$URL';
-            config.puppeteerOptions.headless = true;
-            fs.writeFileSync('Dep.Tests/puppeteer/${{ env.OS_CONFIG }}', JSON.stringify(config, null, 2));
-          "
-
-      - name: Configure Report Portal
-        shell: bash
-        env:
-          REPORT_API_KEY: ${{ secrets.REPORT_KEY }}
-        run: |
-          node -e "
-            const fs = require('fs');
-            const config = JSON.parse(fs.readFileSync('Dep.Tests/tools/report_portal/config.json', 'utf8'));
-            config.api_key = process.env.REPORT_API_KEY;
-            config.project_name = 'docsserver';
-            config.launch_name = 'GitHub Actions - docsserver - ${{ env.OS_NAME }}';
-            fs.writeFileSync('Dep.Tests/tools/report_portal/config.json', JSON.stringify(config, null, 2));
-          "
-
-      - name: Configure Chrome sandbox (Linux only)
-        if: runner.os == 'Linux'
-        run: |
-          CHROME_DIR=$(find ~/.cache/puppeteer/chrome -name "linux-*" -type d 2>/dev/null | head -n 1)
-          if [ -n "$CHROME_DIR" ]; then
-            cd "$CHROME_DIR/chrome-linux64/"
-            sudo chown root:root chrome_sandbox
-            sudo chmod 4755 chrome_sandbox
-            sudo cp -p chrome_sandbox /usr/local/sbin/chrome-devel-sandbox
-            echo "CHROME_DEVEL_SANDBOX=/usr/local/sbin/chrome-devel-sandbox" >> $GITHUB_ENV
-          fi
-
-      - name: Run tests chunk ${{ matrix.chunk }}
-        id: run-tests
-        shell: bash
-        working-directory: Dep.Tests/puppeteer/engine
-        run: |
-          python run.py \
-            --providers example \
-            --chunk-id ${{ matrix.chunk }} \
-            --chunk-size ${{ needs.prepare.outputs.chunk_size }} \
-            --disable_animation \
-            --config_params puppeteerOptions.headless=true \
-            --connect_portal 2>&1 | tee output.log || true
-
-          UUID=""
-          if [ -f "output.log" ]; then
-            UUID=$(grep 'RP_LAUNCH_UUID=' output.log 2>/dev/null | sed 's/.*RP_LAUNCH_UUID=//g' | tr -d '[:space:]' | tail -n 1 || echo "")
-          fi
-
-          echo "uuid=$UUID" >> $GITHUB_OUTPUT
-
-          if [ -n "$UUID" ]; then
-            echo "$UUID" > launch_uuid.txt
-          else
-            touch launch_uuid.txt
-          fi
-
-          rm -f output.log
-
-      - name: Upload Launch UUID
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: launch-uuid-${{ env.OS_NAME }}-chunk-${{ matrix.chunk }}
-          path: Dep.Tests/puppeteer/engine/launch_uuid.txt
-          retention-days: 1
-          if-no-files-found: warn
-
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: results-${{ env.OS_NAME }}-chunk-${{ matrix.chunk }}
-          path: Dep.Tests/puppeteer/out
-          retention-days: 2
+          provider: example
+          chunk_id: ${{ matrix.chunk }}
+          chunk_size: ${{ needs.prepare.outputs.chunk_size }}
+          os_name: windows
+          os_config: config_chrome_win.json
+          url: ${{ github.event.inputs.url }}
+          url_release: ${{ secrets.URL_RELEASE }}
+          url_hotfix: ${{ secrets.URL_HOTFIX }}
+          url_develop: ${{ secrets.URL_DEVELOP }}
+          project_name: docsserver
+          read_pat: ${{ secrets.READ_PAT }}
+          report_key: ${{ secrets.REPORT_KEY }}
 
   collect-uuids-windows:
     name: Collect Windows UUIDs
@@ -236,19 +92,9 @@ jobs:
         with:
           os-name: windows
 
-      - name: Send Telegram notification
-        if: always()
-        uses: ./.github/actions/telegram-notify
-        with:
-          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
-          telegram_to: ${{ secrets.TELEGRAM_CHAT_ID }}
-          os_name: windows
-          provider: example
-          job_status: ${{ job.status }}
-
   merge-launches-windows:
     name: Merge Windows Launches
-    needs: [collect-uuids-windows]
+    needs: [run-tests-windows, collect-uuids-windows]
     runs-on: ubuntu-latest
     if: "!cancelled()"
 
@@ -265,6 +111,16 @@ jobs:
           project-name: docsserver
           github-token: ${{ secrets.READ_PAT }}
 
+      - name: Send Telegram notification
+        if: always()
+        uses: ./.github/actions/telegram-notify
+        with:
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          os_name: windows
+          provider: example
+          job_status: ${{ needs.run-tests-windows.result == 'failure' && 'failure' || job.status }}
+
   run-tests-linux:
     name: Linux - Chunk ${{ matrix.chunk }}
     needs: [prepare]
@@ -274,141 +130,26 @@ jobs:
       matrix:
         chunk: ${{ fromJson(needs.prepare.outputs.matrix).chunk }}
       fail-fast: false
-    env:
-      OS_NAME: linux
-      OS_CONFIG: config_chrome_linux.json
 
     steps:
-      - name: Checkout Dep.Tests repository
+      - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Run tests
+        uses: ./.github/actions/puppeteer-run-chunk
         with:
-          repository: ONLYOFFICE-data/Dep.Tests
-          path: Dep.Tests
-          token: ${{ secrets.READ_PAT }}
-          submodules: recursive
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 'latest'
-
-      - name: Install npm dependencies
-        working-directory: Dep.Tests/puppeteer/engine
-        run: npm install
-
-      - name: Cache Puppeteer browsers
-        id: cache-puppeteer
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/puppeteer
-          key: ${{ runner.os }}-puppeteer-chrome-${{ hashFiles('Dep.Tests/puppeteer/engine/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-puppeteer-chrome-
-
-      - name: Install Chrome for Puppeteer
-        if: steps.cache-puppeteer.outputs.cache-hit != 'true'
-        shell: bash
-        run: |
-          cd Dep.Tests/puppeteer/engine
-          npx puppeteer browsers install chrome
-
-      - name: Configure test URL
-        shell: bash
-        run: |
-          URL_INPUT="${{ github.event.inputs.url }}"
-
-          case "$URL_INPUT" in
-            release) URL="${{ secrets.URL_RELEASE }}" ;;
-            hotfix) URL="${{ secrets.URL_HOTFIX }}" ;;
-            develop) URL="${{ secrets.URL_DEVELOP }}" ;;
-            *) URL="$URL_INPUT" ;;
-          esac
-
-          [[ "$URL" != */example ]] && URL="${URL%/}/example"
-
-          node -e "
-            const fs = require('fs');
-            const config = JSON.parse(fs.readFileSync('Dep.Tests/puppeteer/${{ env.OS_CONFIG }}', 'utf8'));
-            config.testOptions.url = '$URL';
-            config.puppeteerOptions.headless = true;
-            fs.writeFileSync('Dep.Tests/puppeteer/${{ env.OS_CONFIG }}', JSON.stringify(config, null, 2));
-          "
-
-      - name: Configure Report Portal
-        shell: bash
-        env:
-          REPORT_API_KEY: ${{ secrets.REPORT_KEY }}
-        run: |
-          node -e "
-            const fs = require('fs');
-            const config = JSON.parse(fs.readFileSync('Dep.Tests/tools/report_portal/config.json', 'utf8'));
-            config.api_key = process.env.REPORT_API_KEY;
-            config.project_name = 'docsserver';
-            config.launch_name = 'GitHub Actions - docsserver - ${{ env.OS_NAME }}';
-            fs.writeFileSync('Dep.Tests/tools/report_portal/config.json', JSON.stringify(config, null, 2));
-          "
-
-      - name: Configure Chrome sandbox (Linux only)
-        if: runner.os == 'Linux'
-        run: |
-          CHROME_DIR=$(find ~/.cache/puppeteer/chrome -name "linux-*" -type d 2>/dev/null | head -n 1)
-          if [ -n "$CHROME_DIR" ]; then
-            cd "$CHROME_DIR/chrome-linux64/"
-            sudo chown root:root chrome_sandbox
-            sudo chmod 4755 chrome_sandbox
-            sudo cp -p chrome_sandbox /usr/local/sbin/chrome-devel-sandbox
-            echo "CHROME_DEVEL_SANDBOX=/usr/local/sbin/chrome-devel-sandbox" >> $GITHUB_ENV
-          fi
-
-      - name: Run tests chunk ${{ matrix.chunk }}
-        id: run-tests
-        shell: bash
-        working-directory: Dep.Tests/puppeteer/engine
-        run: |
-          python run.py \
-            --providers example \
-            --chunk-id ${{ matrix.chunk }} \
-            --chunk-size ${{ needs.prepare.outputs.chunk_size }} \
-            --disable_animation \
-            --config_params puppeteerOptions.headless=true \
-            --connect_portal 2>&1 | tee output.log || true
-
-          UUID=""
-          if [ -f "output.log" ]; then
-            UUID=$(grep 'RP_LAUNCH_UUID=' output.log 2>/dev/null | sed 's/.*RP_LAUNCH_UUID=//g' | tr -d '[:space:]' | tail -n 1 || echo "")
-          fi
-
-          echo "uuid=$UUID" >> $GITHUB_OUTPUT
-
-          if [ -n "$UUID" ]; then
-            echo "$UUID" > launch_uuid.txt
-          else
-            touch launch_uuid.txt
-          fi
-
-          rm -f output.log
-
-      - name: Upload Launch UUID
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: launch-uuid-${{ env.OS_NAME }}-chunk-${{ matrix.chunk }}
-          path: Dep.Tests/puppeteer/engine/launch_uuid.txt
-          retention-days: 1
-          if-no-files-found: warn
-
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: results-${{ env.OS_NAME }}-chunk-${{ matrix.chunk }}
-          path: Dep.Tests/puppeteer/out
-          retention-days: 2
+          provider: example
+          chunk_id: ${{ matrix.chunk }}
+          chunk_size: ${{ needs.prepare.outputs.chunk_size }}
+          os_name: linux
+          os_config: config_chrome_linux.json
+          url: ${{ github.event.inputs.url }}
+          url_release: ${{ secrets.URL_RELEASE }}
+          url_hotfix: ${{ secrets.URL_HOTFIX }}
+          url_develop: ${{ secrets.URL_DEVELOP }}
+          project_name: docsserver
+          read_pat: ${{ secrets.READ_PAT }}
+          report_key: ${{ secrets.REPORT_KEY }}
 
   collect-uuids-linux:
     name: Collect Linux UUIDs
@@ -428,19 +169,9 @@ jobs:
         with:
           os-name: linux
 
-      - name: Send Telegram notification
-        if: always()
-        uses: ./.github/actions/telegram-notify
-        with:
-          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
-          telegram_to: ${{ secrets.TELEGRAM_CHAT_ID }}
-          os_name: linux
-          provider: example
-          job_status: ${{ job.status }}
-
   merge-launches-linux:
     name: Merge Linux Launches
-    needs: [collect-uuids-linux]
+    needs: [run-tests-linux, collect-uuids-linux]
     runs-on: ubuntu-latest
     if: "!cancelled()"
 
@@ -457,6 +188,16 @@ jobs:
           project-name: docsserver
           github-token: ${{ secrets.READ_PAT }}
 
+      - name: Send Telegram notification
+        if: always()
+        uses: ./.github/actions/telegram-notify
+        with:
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          os_name: linux
+          provider: example
+          job_status: ${{ needs.run-tests-linux.result == 'failure' && 'failure' || job.status }}
+
   run-tests-macos:
     name: macOS - Chunk ${{ matrix.chunk }}
     needs: [prepare]
@@ -466,129 +207,26 @@ jobs:
       matrix:
         chunk: ${{ fromJson(needs.prepare.outputs.matrix).chunk }}
       fail-fast: false
-    env:
-      OS_NAME: macos
-      OS_CONFIG: config_chrome_mac.json
 
     steps:
-      - name: Checkout Dep.Tests repository
+      - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Run tests
+        uses: ./.github/actions/puppeteer-run-chunk
         with:
-          repository: ONLYOFFICE-data/Dep.Tests
-          path: Dep.Tests
-          token: ${{ secrets.READ_PAT }}
-          submodules: recursive
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 'latest'
-
-      - name: Install npm dependencies
-        working-directory: Dep.Tests/puppeteer/engine
-        run: npm install
-
-      - name: Cache Puppeteer browsers
-        id: cache-puppeteer
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/puppeteer
-          key: ${{ runner.os }}-puppeteer-chrome-${{ hashFiles('Dep.Tests/puppeteer/engine/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-puppeteer-chrome-
-
-      - name: Install Chrome for Puppeteer
-        if: steps.cache-puppeteer.outputs.cache-hit != 'true'
-        shell: bash
-        run: |
-          cd Dep.Tests/puppeteer/engine
-          npx puppeteer browsers install chrome
-
-      - name: Configure test URL
-        shell: bash
-        run: |
-          URL_INPUT="${{ github.event.inputs.url }}"
-
-          case "$URL_INPUT" in
-            release) URL="${{ secrets.URL_RELEASE }}" ;;
-            hotfix) URL="${{ secrets.URL_HOTFIX }}" ;;
-            develop) URL="${{ secrets.URL_DEVELOP }}" ;;
-            *) URL="$URL_INPUT" ;;
-          esac
-
-          [[ "$URL" != */example ]] && URL="${URL%/}/example"
-
-          node -e "
-            const fs = require('fs');
-            const config = JSON.parse(fs.readFileSync('Dep.Tests/puppeteer/${{ env.OS_CONFIG }}', 'utf8'));
-            config.testOptions.url = '$URL';
-            config.puppeteerOptions.headless = true;
-            fs.writeFileSync('Dep.Tests/puppeteer/${{ env.OS_CONFIG }}', JSON.stringify(config, null, 2));
-          "
-
-      - name: Configure Report Portal
-        shell: bash
-        env:
-          REPORT_API_KEY: ${{ secrets.REPORT_KEY }}
-        run: |
-          node -e "
-            const fs = require('fs');
-            const config = JSON.parse(fs.readFileSync('Dep.Tests/tools/report_portal/config.json', 'utf8'));
-            config.api_key = process.env.REPORT_API_KEY;
-            config.project_name = 'docsserver';
-            config.launch_name = 'GitHub Actions - docsserver - ${{ env.OS_NAME }}';
-            fs.writeFileSync('Dep.Tests/tools/report_portal/config.json', JSON.stringify(config, null, 2));
-          "
-
-      - name: Run tests chunk ${{ matrix.chunk }}
-        id: run-tests
-        shell: bash
-        working-directory: Dep.Tests/puppeteer/engine
-        run: |
-          python run.py \
-            --providers example \
-            --chunk-id ${{ matrix.chunk }} \
-            --chunk-size ${{ needs.prepare.outputs.chunk_size }} \
-            --disable_animation \
-            --config_params puppeteerOptions.headless=true \
-            --connect_portal 2>&1 | tee output.log || true
-
-          UUID=""
-          if [ -f "output.log" ]; then
-            UUID=$(grep 'RP_LAUNCH_UUID=' output.log 2>/dev/null | sed 's/.*RP_LAUNCH_UUID=//g' | tr -d '[:space:]' | tail -n 1 || echo "")
-          fi
-
-          echo "uuid=$UUID" >> $GITHUB_OUTPUT
-
-          if [ -n "$UUID" ]; then
-            echo "$UUID" > launch_uuid.txt
-          else
-            touch launch_uuid.txt
-          fi
-
-          rm -f output.log
-
-      - name: Upload Launch UUID
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: launch-uuid-${{ env.OS_NAME }}-chunk-${{ matrix.chunk }}
-          path: Dep.Tests/puppeteer/engine/launch_uuid.txt
-          retention-days: 1
-          if-no-files-found: warn
-
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: results-${{ env.OS_NAME }}-chunk-${{ matrix.chunk }}
-          path: Dep.Tests/puppeteer/out
-          retention-days: 2
+          provider: example
+          chunk_id: ${{ matrix.chunk }}
+          chunk_size: ${{ needs.prepare.outputs.chunk_size }}
+          os_name: macos
+          os_config: config_chrome_mac.json
+          url: ${{ github.event.inputs.url }}
+          url_release: ${{ secrets.URL_RELEASE }}
+          url_hotfix: ${{ secrets.URL_HOTFIX }}
+          url_develop: ${{ secrets.URL_DEVELOP }}
+          project_name: docsserver
+          read_pat: ${{ secrets.READ_PAT }}
+          report_key: ${{ secrets.REPORT_KEY }}
 
   collect-uuids-macos:
     name: Collect macOS UUIDs
@@ -608,19 +246,9 @@ jobs:
         with:
           os-name: macos
 
-      - name: Send Telegram notification
-        if: always()
-        uses: ./.github/actions/telegram-notify
-        with:
-          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
-          telegram_to: ${{ secrets.TELEGRAM_CHAT_ID }}
-          os_name: macos
-          provider: example
-          job_status: ${{ job.status }}
-
   merge-launches-macos:
     name: Merge macOS Launches
-    needs: [collect-uuids-macos]
+    needs: [run-tests-macos, collect-uuids-macos]
     runs-on: ubuntu-latest
     if: "!cancelled()"
 
@@ -636,3 +264,13 @@ jobs:
           api-key: ${{ secrets.REPORT_KEY }}
           project-name: docsserver
           github-token: ${{ secrets.READ_PAT }}
+
+      - name: Send Telegram notification
+        if: always()
+        uses: ./.github/actions/telegram-notify
+        with:
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          os_name: macos
+          provider: example
+          job_status: ${{ needs.run-tests-macos.result == 'failure' && 'failure' || job.status }}

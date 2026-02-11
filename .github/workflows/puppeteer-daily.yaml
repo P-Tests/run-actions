@@ -24,16 +24,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Run Puppeteer Tests
-        uses: ./.github/actions/puppeteer-test
-        with:
-          provider: "docspaceEU"
-          project_name: "docsserver-daily"
-          suite: "daily"
-          launch_name: "Daily Tests"
-          os_name: ${{ matrix.os.name }}
-          read_pat: ${{ secrets.READ_PAT }}
-          report_key: ${{ secrets.REPORT_KEY }}
+            - name: Run Puppeteer Tests
+              uses: ./.github/actions/puppeteer-simple-test
+              with:
+                  provider: "docspaceEU"
+                  project_name: "docsserver-daily"
+                  suite: "daily"
+                  launch_name: "Daily Tests"
+                  os_name: ${{ matrix.os.name }}
+                  read_pat: ${{ secrets.READ_PAT }}
+                  report_key: ${{ secrets.REPORT_KEY }}
 
       - name: Send message to Telegram
         if: always()
@@ -63,16 +63,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Run Puppeteer Tests
-        uses: ./.github/actions/puppeteer-test
-        with:
-          provider: "docspaceUS"
-          project_name: "docsserver-daily"
-          suite: "daily"
-          launch_name: "Daily Tests"
-          os_name: ${{ matrix.os.name }}
-          read_pat: ${{ secrets.READ_PAT }}
-          report_key: ${{ secrets.REPORT_KEY }}
+            - name: Run Puppeteer Tests
+              uses: ./.github/actions/puppeteer-simple-test
+              with:
+                  provider: "docspaceUS"
+                  project_name: "docsserver-daily"
+                  suite: "daily"
+                  launch_name: "Daily Tests"
+                  os_name: ${{ matrix.os.name }}
+                  read_pat: ${{ secrets.READ_PAT }}
+                  report_key: ${{ secrets.REPORT_KEY }}
 
       - name: Send message to Telegram
         if: always()
@@ -103,16 +103,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Run Puppeteer Tests
-        uses: ./.github/actions/puppeteer-test
-        with:
-          provider: "ncoc"
-          project_name: "docsserver-daily"
-          suite: "daily"
-          launch_name: "Daily Tests"
-          os_name: ${{ matrix.os.name }}
-          read_pat: ${{ secrets.READ_PAT }}
-          report_key: ${{ secrets.REPORT_KEY }}
+            - name: Run Puppeteer Tests
+              uses: ./.github/actions/puppeteer-simple-test
+              with:
+                  provider: "ncoc"
+                  project_name: "docsserver-daily"
+                  suite: "daily"
+                  launch_name: "Daily Tests"
+                  os_name: ${{ matrix.os.name }}
+                  read_pat: ${{ secrets.READ_PAT }}
+                  report_key: ${{ secrets.REPORT_KEY }}
 
       - name: Send message to Telegram
         if: always()
@@ -143,16 +143,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Run Puppeteer Tests
-        uses: ./.github/actions/puppeteer-test
-        with:
-          provider: "ocis"
-          project_name: "docsserver-daily"
-          suite: "daily"
-          launch_name: "Daily Tests"
-          os_name: ${{ matrix.os.name }}
-          read_pat: ${{ secrets.READ_PAT }}
-          report_key: ${{ secrets.REPORT_KEY }}
+            - name: Run Puppeteer Tests
+              uses: ./.github/actions/puppeteer-simple-test
+              with:
+                  provider: "ocis"
+                  project_name: "docsserver-daily"
+                  suite: "daily"
+                  launch_name: "Daily Tests"
+                  os_name: ${{ matrix.os.name }}
+                  read_pat: ${{ secrets.READ_PAT }}
+                  report_key: ${{ secrets.REPORT_KEY }}
 
       - name: Send message to Telegram
         if: always()
@@ -183,16 +183,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Run Puppeteer Tests
-        uses: ./.github/actions/puppeteer-test
-        with:
-          provider: "wopi"
-          project_name: "docsserver-daily"
-          suite: "daily"
-          launch_name: "Daily Tests"
-          os_name: ${{ matrix.os.name }}
-          read_pat: ${{ secrets.READ_PAT }}
-          report_key: ${{ secrets.REPORT_KEY }}
+            - name: Run Puppeteer Tests
+              uses: ./.github/actions/puppeteer-simple-test
+              with:
+                  provider: "wopi"
+                  project_name: "docsserver-daily"
+                  suite: "daily"
+                  launch_name: "Daily Tests"
+                  os_name: ${{ matrix.os.name }}
+                  read_pat: ${{ secrets.READ_PAT }}
+                  report_key: ${{ secrets.REPORT_KEY }}
 
       - name: Send message to Telegram
         if: always()
@@ -223,16 +223,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Run Puppeteer Tests
-        uses: ./.github/actions/puppeteer-test
-        with:
-          provider: "example"
-          project_name: "docsserver-daily"
-          suite: "daily"
-          launch_name: "Daily Tests"
-          os_name: ${{ matrix.os.name }}
-          read_pat: ${{ secrets.READ_PAT }}
-          report_key: ${{ secrets.REPORT_KEY }}
+            - name: Run Puppeteer Tests
+              uses: ./.github/actions/puppeteer-simple-test
+              with:
+                  provider: "example"
+                  project_name: "docsserver-daily"
+                  suite: "daily"
+                  launch_name: "Daily Tests"
+                  os_name: ${{ matrix.os.name }}
+                  read_pat: ${{ secrets.READ_PAT }}
+                  report_key: ${{ secrets.REPORT_KEY }}
 
       - name: Send message to Telegram
         if: always()
