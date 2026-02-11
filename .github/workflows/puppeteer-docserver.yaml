@@ -112,6 +112,11 @@ jobs:
           project-name: docsserver
           github-token: ${{ secrets.READ_PAT }}
 
+      - name: Get Job ID
+        if: always()
+        id: job-id
+        uses: austenstone/job-id@v1
+
       - name: Send Telegram notification
         if: always()
         uses: ./.github/actions/telegram-notify
@@ -121,6 +126,7 @@ jobs:
           os_name: windows
           provider: example
           job_status: ${{ needs.run-tests-windows.result == 'failure' && 'failure' || job.status }}
+          job_id: ${{ steps.job-id.outputs.job-id }}
           rp_url: ${{ steps.merge.outputs.rp_launch_url }}
 
   run-tests-linux:
@@ -191,6 +197,11 @@ jobs:
           project-name: docsserver
           github-token: ${{ secrets.READ_PAT }}
 
+      - name: Get Job ID
+        if: always()
+        id: job-id
+        uses: austenstone/job-id@v1
+
       - name: Send Telegram notification
         if: always()
         uses: ./.github/actions/telegram-notify
@@ -200,6 +211,7 @@ jobs:
           os_name: linux
           provider: example
           job_status: ${{ needs.run-tests-linux.result == 'failure' && 'failure' || job.status }}
+          job_id: ${{ steps.job-id.outputs.job-id }}
           rp_url: ${{ steps.merge.outputs.rp_launch_url }}
 
   run-tests-macos:
@@ -270,6 +282,11 @@ jobs:
           project-name: docsserver
           github-token: ${{ secrets.READ_PAT }}
 
+      - name: Get Job ID
+        if: always()
+        id: job-id
+        uses: austenstone/job-id@v1
+
       - name: Send Telegram notification
         if: always()
         uses: ./.github/actions/telegram-notify
@@ -279,4 +296,5 @@ jobs:
           os_name: macos
           provider: example
           job_status: ${{ needs.run-tests-macos.result == 'failure' && 'failure' || job.status }}
+          job_id: ${{ steps.job-id.outputs.job-id }}
           rp_url: ${{ steps.merge.outputs.rp_launch_url }}

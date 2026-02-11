@@ -36,17 +36,11 @@ jobs:
                   read_pat: ${{ secrets.READ_PAT }}
                   report_key: ${{ secrets.REPORT_KEY }}
 
-<<<<<<< HEAD
-      - name: Send message to Telegram
-        if: always()
-        uses: ./.github/actions/telegram-notify
-        with:
-          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
-          telegram_to: ${{ secrets.TELEGRAM_TO }}
-          os_name: ${{ matrix.os.name }}
-          provider: "docspaceEU"
-          job_status: ${{ job.status }}
-=======
+            - name: Get Job ID
+              if: always()
+              id: job-id
+              uses: austenstone/job-id@v1
+
             - name: Send message to Telegram
               if: always()
               uses: ./.github/actions/telegram-notify
@@ -56,6 +50,7 @@ jobs:
                   os_name: ${{ matrix.os.name }}
                   provider: "docspaceEU"
                   job_status: ${{ job.status }}
+                  job_id: ${{ steps.job-id.outputs.job-id }}
                   rp_url: ${{ steps.test-run.outputs.rp_launch_url }}
 >>>>>>> 8bac557 (add set ReportPortal launch URL in tg message)
 
@@ -89,17 +84,11 @@ jobs:
                   read_pat: ${{ secrets.READ_PAT }}
                   report_key: ${{ secrets.REPORT_KEY }}
 
-<<<<<<< HEAD
-      - name: Send message to Telegram
-        if: always()
-        uses: ./.github/actions/telegram-notify
-        with:
-          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
-          telegram_to: ${{ secrets.TELEGRAM_TO }}
-          os_name: ${{ matrix.os.name }}
-          provider: "docspaceUS"
-          job_status: ${{ job.status }}
-=======
+            - name: Get Job ID
+              if: always()
+              id: job-id
+              uses: austenstone/job-id@v1
+
             - name: Send message to Telegram
               if: always()
               uses: ./.github/actions/telegram-notify
@@ -109,6 +98,7 @@ jobs:
                   os_name: ${{ matrix.os.name }}
                   provider: "docspaceUS"
                   job_status: ${{ job.status }}
+                  job_id: ${{ steps.job-id.outputs.job-id }}
                   rp_url: ${{ steps.test-run.outputs.rp_launch_url }}
 >>>>>>> 8bac557 (add set ReportPortal launch URL in tg message)
 
@@ -144,17 +134,11 @@ jobs:
                   read_pat: ${{ secrets.READ_PAT }}
                   report_key: ${{ secrets.REPORT_KEY }}
 
-<<<<<<< HEAD
-      - name: Send message to Telegram
-        if: always()
-        uses: ./.github/actions/telegram-notify
-        with:
-          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
-          telegram_to: ${{ secrets.TELEGRAM_TO }}
-          os_name: ${{ matrix.os.name }}
-          provider: "ncoc"
-          job_status: ${{ job.status }}
-=======
+            - name: Get Job ID
+              if: always()
+              id: job-id
+              uses: austenstone/job-id@v1
+
             - name: Send message to Telegram
               if: always()
               uses: ./.github/actions/telegram-notify
@@ -164,6 +148,7 @@ jobs:
                   os_name: ${{ matrix.os.name }}
                   provider: "ncoc"
                   job_status: ${{ job.status }}
+                  job_id: ${{ steps.job-id.outputs.job-id }}
                   rp_url: ${{ steps.test-run.outputs.rp_launch_url }}
 >>>>>>> 8bac557 (add set ReportPortal launch URL in tg message)
 
@@ -199,17 +184,11 @@ jobs:
                   read_pat: ${{ secrets.READ_PAT }}
                   report_key: ${{ secrets.REPORT_KEY }}
 
-<<<<<<< HEAD
-      - name: Send message to Telegram
-        if: always()
-        uses: ./.github/actions/telegram-notify
-        with:
-          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
-          telegram_to: ${{ secrets.TELEGRAM_TO }}
-          os_name: ${{ matrix.os.name }}
-          provider: "ocis"
-          job_status: ${{ job.status }}
-=======
+            - name: Get Job ID
+              if: always()
+              id: job-id
+              uses: austenstone/job-id@v1
+
             - name: Send message to Telegram
               if: always()
               uses: ./.github/actions/telegram-notify
@@ -219,6 +198,7 @@ jobs:
                   os_name: ${{ matrix.os.name }}
                   provider: "ocis"
                   job_status: ${{ job.status }}
+                  job_id: ${{ steps.job-id.outputs.job-id }}
                   rp_url: ${{ steps.test-run.outputs.rp_launch_url }}
 >>>>>>> 8bac557 (add set ReportPortal launch URL in tg message)
 
@@ -254,17 +234,11 @@ jobs:
                   read_pat: ${{ secrets.READ_PAT }}
                   report_key: ${{ secrets.REPORT_KEY }}
 
-<<<<<<< HEAD
-      - name: Send message to Telegram
-        if: always()
-        uses: ./.github/actions/telegram-notify
-        with:
-          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
-          telegram_to: ${{ secrets.TELEGRAM_TO }}
-          os_name: ${{ matrix.os.name }}
-          provider: "wopi"
-          job_status: ${{ job.status }}
-=======
+            - name: Get Job ID
+              if: always()
+              id: job-id
+              uses: austenstone/job-id@v1
+
             - name: Send message to Telegram
               if: always()
               uses: ./.github/actions/telegram-notify
@@ -274,6 +248,7 @@ jobs:
                   os_name: ${{ matrix.os.name }}
                   provider: "wopi"
                   job_status: ${{ job.status }}
+                  job_id: ${{ steps.job-id.outputs.job-id }}
                   rp_url: ${{ steps.test-run.outputs.rp_launch_url }}
 >>>>>>> 8bac557 (add set ReportPortal launch URL in tg message)
 
@@ -309,17 +284,11 @@ jobs:
                   read_pat: ${{ secrets.READ_PAT }}
                   report_key: ${{ secrets.REPORT_KEY }}
 
-<<<<<<< HEAD
-      - name: Send message to Telegram
-        if: always()
-        uses: ./.github/actions/telegram-notify
-        with:
-          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
-          telegram_to: ${{ secrets.TELEGRAM_TO }}
-          os_name: ${{ matrix.os.name }}
-          provider: "example"
-          job_status: ${{ job.status }}
-=======
+            - name: Get Job ID
+              if: always()
+              id: job-id
+              uses: austenstone/job-id@v1
+
             - name: Send message to Telegram
               if: always()
               uses: ./.github/actions/telegram-notify
@@ -329,5 +298,6 @@ jobs:
                   os_name: ${{ matrix.os.name }}
                   provider: "example"
                   job_status: ${{ job.status }}
+                  job_id: ${{ steps.job-id.outputs.job-id }}
                   rp_url: ${{ steps.test-run.outputs.rp_launch_url }}
 >>>>>>> 8bac557 (add set ReportPortal launch URL in tg message)

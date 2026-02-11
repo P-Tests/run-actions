@@ -24,6 +24,11 @@ jobs:
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ secrets.REPORT_KEY }}
 
+      - name: Get Job ID
+        if: always()
+        id: job-id
+        uses: austenstone/job-id@v1
+
       - name: Send message to Telegram
         if: always()
         uses: ./.github/actions/telegram-notify
@@ -33,6 +38,7 @@ jobs:
           os_name: 'windows'
           provider: 'docspaceEU'
           job_status: ${{ job.status }}
+          job_id: ${{ steps.job-id.outputs.job-id }}
           rp_url: ${{ steps.test-run.outputs.rp_launch_url }}
 
   test-docspace-us:
@@ -53,6 +59,11 @@ jobs:
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ secrets.REPORT_KEY }}
 
+      - name: Get Job ID
+        if: always()
+        id: job-id
+        uses: austenstone/job-id@v1
+
       - name: Send message to Telegram
         if: always()
         uses: ./.github/actions/telegram-notify
@@ -62,4 +73,5 @@ jobs:
           os_name: 'windows'
           provider: 'docspaceUS'
           job_status: ${{ job.status }}
+          job_id: ${{ steps.job-id.outputs.job-id }}
           rp_url: ${{ steps.test-run.outputs.rp_launch_url }}

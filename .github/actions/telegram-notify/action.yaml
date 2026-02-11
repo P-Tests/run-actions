@@ -17,6 +17,9 @@ inputs:
   job_status:
     description: 'Job status (from job.status context)'
     required: true
+  job_id:
+    description: 'Job ID (from github.job context)'
+    required: true
   rp_url:
     description: 'ReportPortal launch URL'
     required: false
@@ -48,10 +51,6 @@ runs:
           echo "OS_DISPLAY=macOS" >> $GITHUB_ENV
         fi
 
-    - name: Get Job ID
-      id: job-id
-      uses: austenstone/job-id@v1
-
     - name: Send message to Telegram
       shell: bash
       run: |
@@ -72,11 +71,11 @@ runs:
         Github job status: ${STATUS_EMOJI} - ${{ inputs.job_status }}
 
         [View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-        [View Job Details](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/job/${{ steps.job-id.outputs.job-id }})"
+        [View Job Details](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/job/${{ inputs.job_id }})"
 
         if [[ -n "${{ inputs.rp_url }}" ]]; then
           MESSAGE="${MESSAGE}
-        [View ReportPortal Launch](${{ inputs.rp_url }})"
+        [View Report](${{ inputs.rp_url }})"
         fi
 
         MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')
