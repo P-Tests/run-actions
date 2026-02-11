@@ -71,6 +71,6 @@ runs:
 
         python merge_launches.py \
           --launch-uuids $UUID_LIST \
-          --name "Merged Launch - docsserver - ${{ inputs.os-name }}" \
+          --name "Github Action All Tests" \
           --merge-type DEEP \
           --description " "

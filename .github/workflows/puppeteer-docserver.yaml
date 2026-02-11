@@ -16,7 +16,7 @@ on:
       chunk_size:
         description: 'Number of tests per chunk'
         required: false
-        default: '1000'
+        default: '500'
         type: string
 
 concurrency:
@@ -149,12 +149,14 @@ jobs:
 
       - name: Configure Report Portal
         shell: bash
+        env:
+          REPORT_API_KEY: ${{ secrets.REPORT_KEY }}
         run: |
           node -e "
             const fs = require('fs');
             const config = JSON.parse(fs.readFileSync('Dep.Tests/tools/report_portal/config.json', 'utf8'));
-            config.api_key = 'test_dpj1-SyRRGWSd9Jqie_-DieY4PFerARKwrKlmjAaVgMsjBmmAOAsKo16dDrNb2q6';
-            config.project_name = 'coldwaveuwu_personal';
+            config.api_key = process.env.REPORT_API_KEY;
+            config.project_name = 'docsserver';
             config.launch_name = 'GitHub Actions - docsserver - ${{ env.OS_NAME }}';
             fs.writeFileSync('Dep.Tests/tools/report_portal/config.json', JSON.stringify(config, null, 2));
           "
@@ -259,8 +261,8 @@ jobs:
         with:
           os-name: windows
           launch-uuids: ${{ needs.collect-uuids-windows.outputs.launch_uuids }}
-          api-key: test_dpj1-SyRRGWSd9Jqie_-DieY4PFerARKwrKlmjAaVgMsjBmmAOAsKo16dDrNb2q6
-          project-name: coldwaveuwu_personal
+          api-key: ${{ secrets.REPORT_KEY }}
+          project-name: docsserver
           github-token: ${{ secrets.READ_PAT }}
 
   run-tests-linux:
@@ -339,12 +341,14 @@ jobs:
 
       - name: Configure Report Portal
         shell: bash
+        env:
+          REPORT_API_KEY: ${{ secrets.REPORT_KEY }}
         run: |
           node -e "
             const fs = require('fs');
             const config = JSON.parse(fs.readFileSync('Dep.Tests/tools/report_portal/config.json', 'utf8'));
-            config.api_key = 'test_dpj1-SyRRGWSd9Jqie_-DieY4PFerARKwrKlmjAaVgMsjBmmAOAsKo16dDrNb2q6';
-            config.project_name = 'coldwaveuwu_personal';
+            config.api_key = process.env.REPORT_API_KEY;
+            config.project_name = 'docsserver';
             config.launch_name = 'GitHub Actions - docsserver - ${{ env.OS_NAME }}';
             fs.writeFileSync('Dep.Tests/tools/report_portal/config.json', JSON.stringify(config, null, 2));
           "
@@ -449,8 +453,8 @@ jobs:
         with:
           os-name: linux
           launch-uuids: ${{ needs.collect-uuids-linux.outputs.launch_uuids }}
-          api-key: test_dpj1-SyRRGWSd9Jqie_-DieY4PFerARKwrKlmjAaVgMsjBmmAOAsKo16dDrNb2q6
-          project-name: coldwaveuwu_personal
+          api-key: ${{ secrets.REPORT_KEY }}
+          project-name: docsserver
           github-token: ${{ secrets.READ_PAT }}
 
   run-tests-macos:
@@ -529,12 +533,14 @@ jobs:
 
       - name: Configure Report Portal
         shell: bash
+        env:
+          REPORT_API_KEY: ${{ secrets.REPORT_KEY }}
         run: |
           node -e "
             const fs = require('fs');
             const config = JSON.parse(fs.readFileSync('Dep.Tests/tools/report_portal/config.json', 'utf8'));
-            config.api_key = 'test_dpj1-SyRRGWSd9Jqie_-DieY4PFerARKwrKlmjAaVgMsjBmmAOAsKo16dDrNb2q6';
-            config.project_name = 'coldwaveuwu_personal';
+            config.api_key = process.env.REPORT_API_KEY;
+            config.project_name = 'docsserver';
             config.launch_name = 'GitHub Actions - docsserver - ${{ env.OS_NAME }}';
             fs.writeFileSync('Dep.Tests/tools/report_portal/config.json', JSON.stringify(config, null, 2));
           "
@@ -627,6 +633,6 @@ jobs:
         with:
           os-name: macos
           launch-uuids: ${{ needs.collect-uuids-macos.outputs.launch_uuids }}
-          api-key: test_dpj1-SyRRGWSd9Jqie_-DieY4PFerARKwrKlmjAaVgMsjBmmAOAsKo16dDrNb2q6
-          project-name: coldwaveuwu_personal
+          api-key: ${{ secrets.REPORT_KEY }}
+          project-name: docsserver
           github-token: ${{ secrets.READ_PAT }}
