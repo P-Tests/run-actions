@@ -112,20 +112,21 @@ jobs:
                   rp_url: ${{ steps.test-run.outputs.rp_launch_url }}
 >>>>>>> 8bac557 (add set ReportPortal launch URL in tg message)
 
-  test-ncoc:
-    name: NCOC - ${{ matrix.os.name }}
-    needs: [test-docspaceEU, test-docspaceUS]
-    runs-on: ${{ matrix.os.runner }}
-    strategy:
-      matrix:
-        os:
-          - name: windows
-            runner: windows-latest
-          - name: linux
-            runner: ubuntu-latest
-          - name: macos
-            runner: macos-latest
-      fail-fast: false
+    test-ncoc:
+        name: NCOC - ${{ matrix.os.name }}
+        needs: [test-docspaceEU, test-docspaceUS]
+        if: ${{ !cancelled() }}
+        runs-on: ${{ matrix.os.runner }}
+        strategy:
+            matrix:
+                os:
+                    - name: windows
+                      runner: windows-latest
+                    - name: linux
+                      runner: ubuntu-latest
+                    - name: macos
+                      runner: macos-latest
+            fail-fast: false
 
     steps:
       - name: Checkout repository
@@ -166,20 +167,21 @@ jobs:
                   rp_url: ${{ steps.test-run.outputs.rp_launch_url }}
 >>>>>>> 8bac557 (add set ReportPortal launch URL in tg message)
 
-  test-ocis:
-    name: OCIS - ${{ matrix.os.name }}
-    needs: test-ncoc
-    runs-on: ${{ matrix.os.runner }}
-    strategy:
-      matrix:
-        os:
-          - name: windows
-            runner: windows-latest
-          - name: linux
-            runner: ubuntu-latest
-          - name: macos
-            runner: macos-latest
-      fail-fast: false
+    test-ocis:
+        name: OCIS - ${{ matrix.os.name }}
+        needs: test-ncoc
+        if: ${{ !cancelled() }}
+        runs-on: ${{ matrix.os.runner }}
+        strategy:
+            matrix:
+                os:
+                    - name: windows
+                      runner: windows-latest
+                    - name: linux
+                      runner: ubuntu-latest
+                    - name: macos
+                      runner: macos-latest
+            fail-fast: false
 
     steps:
       - name: Checkout repository
@@ -220,20 +222,21 @@ jobs:
                   rp_url: ${{ steps.test-run.outputs.rp_launch_url }}
 >>>>>>> 8bac557 (add set ReportPortal launch URL in tg message)
 
-  test-wopi:
-    name: WOPI - ${{ matrix.os.name }}
-    needs: test-ocis
-    runs-on: ${{ matrix.os.runner }}
-    strategy:
-      matrix:
-        os:
-          - name: windows
-            runner: windows-latest
-          - name: linux
-            runner: ubuntu-latest
-          - name: macos
-            runner: macos-latest
-      fail-fast: false
+    test-wopi:
+        name: WOPI - ${{ matrix.os.name }}
+        needs: test-ocis
+        if: ${{ !cancelled() }}
+        runs-on: ${{ matrix.os.runner }}
+        strategy:
+            matrix:
+                os:
+                    - name: windows
+                      runner: windows-latest
+                    - name: linux
+                      runner: ubuntu-latest
+                    - name: macos
+                      runner: macos-latest
+            fail-fast: false
 
     steps:
       - name: Checkout repository
@@ -274,20 +277,21 @@ jobs:
                   rp_url: ${{ steps.test-run.outputs.rp_launch_url }}
 >>>>>>> 8bac557 (add set ReportPortal launch URL in tg message)
 
-  test-example:
-    name: Example - ${{ matrix.os.name }}
-    needs: test-wopi
-    runs-on: ${{ matrix.os.runner }}
-    strategy:
-      matrix:
-        os:
-          - name: windows
-            runner: windows-latest
-          - name: linux
-            runner: ubuntu-latest
-          - name: macos
-            runner: macos-latest
-      fail-fast: false
+    test-example:
+        name: Example - ${{ matrix.os.name }}
+        needs: test-wopi
+        if: ${{ !cancelled() }}
+        runs-on: ${{ matrix.os.runner }}
+        strategy:
+            matrix:
+                os:
+                    - name: windows
+                      runner: windows-latest
+                    - name: linux
+                      runner: ubuntu-latest
+                    - name: macos
+                      runner: macos-latest
+            fail-fast: false
 
     steps:
       - name: Checkout repository

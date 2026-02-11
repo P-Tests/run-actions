@@ -117,7 +117,7 @@ jobs:
         uses: ./.github/actions/telegram-notify
         with:
           telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
-          telegram_to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          telegram_to: ${{ secrets.TELEGRAM_TO }}
           os_name: windows
           provider: example
           job_status: ${{ needs.run-tests-windows.result == 'failure' && 'failure' || job.status }}
@@ -196,7 +196,7 @@ jobs:
         uses: ./.github/actions/telegram-notify
         with:
           telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
-          telegram_to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          telegram_to: ${{ secrets.TELEGRAM_TO }}
           os_name: linux
           provider: example
           job_status: ${{ needs.run-tests-linux.result == 'failure' && 'failure' || job.status }}
@@ -275,7 +275,7 @@ jobs:
         uses: ./.github/actions/telegram-notify
         with:
           telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
-          telegram_to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          telegram_to: ${{ secrets.TELEGRAM_TO }}
           os_name: macos
           provider: example
           job_status: ${{ needs.run-tests-macos.result == 'failure' && 'failure' || job.status }}
