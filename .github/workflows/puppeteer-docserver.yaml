@@ -234,6 +234,16 @@ jobs:
         with:
           os-name: windows
 
+      - name: Send Telegram notification
+        if: always()
+        uses: ./.github/actions/telegram-notify
+        with:
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          os_name: windows
+          provider: example
+          job_status: ${{ job.status }}
+
   merge-launches-windows:
     name: Merge Windows Launches
     needs: [collect-uuids-windows]
@@ -262,7 +272,6 @@ jobs:
       matrix:
         chunk: ${{ fromJson(needs.prepare.outputs.matrix).chunk }}
       fail-fast: false
-      max-parallel: 6
     env:
       OS_NAME: linux
       OS_CONFIG: config_chrome_linux.json
@@ -415,6 +424,16 @@ jobs:
         with:
           os-name: linux
 
+      - name: Send Telegram notification
+        if: always()
+        uses: ./.github/actions/telegram-notify
+        with:
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          os_name: linux
+          provider: example
+          job_status: ${{ job.status }}
+
   merge-launches-linux:
     name: Merge Linux Launches
     needs: [collect-uuids-linux]
@@ -443,7 +462,6 @@ jobs:
       matrix:
         chunk: ${{ fromJson(needs.prepare.outputs.matrix).chunk }}
       fail-fast: false
-      max-parallel: 6
     env:
       OS_NAME: macos
       OS_CONFIG: config_chrome_mac.json
@@ -583,6 +601,16 @@ jobs:
         uses: ./.github/actions/collect-uuids
         with:
           os-name: macos
+
+      - name: Send Telegram notification
+        if: always()
+        uses: ./.github/actions/telegram-notify
+        with:
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          os_name: macos
+          provider: example
+          job_status: ${{ job.status }}
 
   merge-launches-macos:
     name: Merge macOS Launches
