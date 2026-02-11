@@ -18,6 +18,11 @@ inputs:
     description: 'GitHub token for accessing private repository'
     required: true
 
+outputs:
+  rp_launch_url:
+    description: 'ReportPortal merged launch URL'
+    value: ${{ steps.merge.outputs.rp_url }}
+
 runs:
   using: 'composite'
   steps:
@@ -35,6 +40,7 @@ runs:
         python-version: '3.10'
 
     - name: Configure and Merge Launches
+      id: merge
       shell: bash
       working-directory: Dep.Tests/tools/report_portal
       run: |
@@ -50,6 +56,7 @@ runs:
 
         if [ -z "$UUIDS" ] || [ "$UUIDS" = "[]" ] || [ "$UUIDS" = "null" ]; then
           echo "No UUIDs for ${{ inputs.os-name }}, skipping merge"
+          echo "rp_url=" >> $GITHUB_OUTPUT
           exit 0
         fi
 
@@ -62,6 +69,7 @@ runs:
 
         if [ "$UUID_COUNT" -le 1 ]; then
           echo "Only $UUID_COUNT UUID(s) for ${{ inputs.os-name }}, merge not needed"
+          echo "rp_url=" >> $GITHUB_OUTPUT
           exit 0
         fi
 
@@ -69,8 +77,17 @@ runs:
 
         echo "Merging $UUID_COUNT launches for ${{ inputs.os-name }}"
 
+        set +e
         python merge_launches.py \
           --launch-uuids $UUID_LIST \
           --name "Github Action All Tests" \
           --merge-type DEEP \
-          --description " "
+          --description " " 2>&1 | tee merge_output.log
+        EXIT_CODE=$?
+        set -e
+
+        RP_URL=$(grep -oP 'RP_LAUNCH_URL=\K.*' merge_output.log 2>/dev/null | tail -n 1 || echo "")
+        echo "rp_url=$RP_URL" >> $GITHUB_OUTPUT
+
+        rm -f merge_output.log
+        exit $EXIT_CODE

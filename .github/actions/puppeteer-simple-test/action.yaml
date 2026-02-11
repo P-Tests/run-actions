@@ -43,6 +43,11 @@ inputs:
     description: 'Report Portal API key'
     required: true
 
+outputs:
+  rp_launch_url:
+    description: 'ReportPortal launch URL'
+    value: ${{ steps.run-tests.outputs.rp_url }}
+
 runs:
   using: 'composite'
   steps:
@@ -157,14 +162,26 @@ runs:
         fi
 
     - name: Run tests
+      id: run-tests
       shell: bash
       working-directory: Dep.Tests/puppeteer/engine
       run: |
+        set +e
         python run.py \
           --suite ${{ inputs.suite }} \
           --disable_animation \
           --config_params puppeteerOptions.headless=true \
-          --providers ${{ inputs.provider }}
+          --providers ${{ inputs.provider }} 2>&1 | tee test_output.log
+        EXIT_CODE=$?
+        set -e
+
+        RP_URL=$(grep 'RP_LAUNCH_URL=' test_output.log 2>/dev/null | tail -n 1 | sed 's/^.*RP_LAUNCH_URL=//' || echo "")
+        if [ -n "$RP_URL" ]; then
+          echo "rp_url=$RP_URL" >> $GITHUB_OUTPUT
+        fi
+
+        rm -f test_output.log
+        exit $EXIT_CODE
 
     - name: Upload test results
       if: always()

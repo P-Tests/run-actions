@@ -17,6 +17,10 @@ inputs:
   job_status:
     description: 'Job status (from job.status context)'
     required: true
+  rp_url:
+    description: 'ReportPortal launch URL'
+    required: false
+    default: ''
   parse_mode:
     description: 'Parse mode for message formatting'
     required: false
@@ -69,6 +73,11 @@ runs:
 
         [View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
         [View Job Details](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/job/${{ steps.job-id.outputs.job-id }})"
+
+        if [[ -n "${{ inputs.rp_url }}" ]]; then
+          MESSAGE="${MESSAGE}
+        [View ReportPortal Launch](${{ inputs.rp_url }})"
+        fi
 
         MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')
         curl -s -X POST "https://api.telegram.org/bot${{ inputs.telegram_token }}/sendMessage" \
