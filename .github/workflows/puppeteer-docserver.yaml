@@ -255,7 +255,7 @@ jobs:
 
   run-tests-linux:
     name: Linux - Chunk ${{ matrix.chunk }}
-    needs: [prepare, merge-launches-windows]
+    needs: [prepare]
     if: "!cancelled()"
     runs-on: ubuntu-latest
     strategy:
@@ -436,7 +436,7 @@ jobs:
 
   run-tests-macos:
     name: macOS - Chunk ${{ matrix.chunk }}
-    needs: [prepare, merge-launches-linux]
+    needs: [prepare]
     if: "!cancelled()"
     runs-on: macos-latest
     strategy:
