@@ -97,6 +97,8 @@ jobs:
     needs: [run-tests-windows, collect-uuids-windows]
     runs-on: ubuntu-latest
     if: "!cancelled()"
+    outputs:
+      rp_launch_url: ${{ steps.merge.outputs.rp_launch_url }}
 
     steps:
       - name: Checkout repository
@@ -188,6 +190,8 @@ jobs:
     needs: [run-tests-linux, collect-uuids-linux]
     runs-on: ubuntu-latest
     if: "!cancelled()"
+    outputs:
+      rp_launch_url: ${{ steps.merge.outputs.rp_launch_url }}
 
     steps:
       - name: Checkout repository
@@ -279,6 +283,8 @@ jobs:
     needs: [run-tests-macos, collect-uuids-macos]
     runs-on: ubuntu-latest
     if: "!cancelled()"
+    outputs:
+      rp_launch_url: ${{ steps.merge.outputs.rp_launch_url }}
 
     steps:
       - name: Checkout repository
@@ -316,3 +322,288 @@ jobs:
           job_status: ${{ needs.run-tests-macos.result == 'failure' && 'failure' || job.status }}
           job_id: ${{ steps.job-id.outputs.job-id }}
           rp_url: ${{ steps.merge.outputs.rp_launch_url }}
+
+  final-summary-windows:
+    name: Windows Test Summary
+    needs: [run-tests-windows, merge-launches-windows]
+    runs-on: ubuntu-latest
+    if: "!cancelled()"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Collect Windows chunk jobs info
+        id: collect-chunks
+        shell: bash
+        run: |
+          # Get all jobs for this workflow run
+          JOBS_JSON=$(gh run view ${{ github.run_id }} --json jobs | jq '.jobs')
+
+          # Collect Windows chunk jobs
+          CHUNKS=$(echo "$JOBS_JSON" | jq -r '[.[] | select(.name | startswith("Windows - Chunk"))] | map({name: .name, status: .status, conclusion: .conclusion, id: .databaseId, url: .url}) | @json')
+          echo "chunks=$CHUNKS" >> $GITHUB_OUTPUT
+
+          # Get merge job URL
+          MERGE_URL=$(echo "$JOBS_JSON" | jq -r '.[] | select(.name == "Merge Windows Launches") | .url')
+          echo "merge_url=$MERGE_URL" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.READ_PAT }}
+
+      - name: Send comprehensive Telegram notification
+        if: always()
+        shell: bash
+        run: |
+          # Function to format chunk jobs
+          format_chunks() {
+            local chunks_json="$1"
+
+            if [[ "$chunks_json" == "[]" || -z "$chunks_json" ]]; then
+              echo "  No chunks found"
+              return
+            fi
+
+            echo "$chunks_json" | jq -r '.[] |
+              if .conclusion == "success" then "  \u2705 "
+              elif .conclusion == "failure" then "  \u274C "
+              elif .conclusion == "cancelled" then "  \u1F6AB "
+              elif .conclusion == "skipped" then "  \u23ED\uFE0F "
+              else "  \u2753 " end +
+              "[" + .name + "](" + .url + ")"'
+          }
+
+          CHUNKS_OUTPUT=$(format_chunks '${{ steps.collect-chunks.outputs.chunks }}')
+
+          # Determine overall status by checking chunk conclusions
+          FAILED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "failure")] | length')
+          CANCELLED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "cancelled")] | length')
+          SUCCESS_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "success")] | length')
+          TOTAL_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq 'length')
+
+          if [[ "$FAILED_COUNT" -gt 0 ]]; then
+            OVERALL_STATUS=$'\u274C Tests failed ('$SUCCESS_COUNT'/'$TOTAL_COUNT' passed)'
+          elif [[ "$CANCELLED_COUNT" -gt 0 ]]; then
+            OVERALL_STATUS=$'\u1F6AB Some tests cancelled ('$SUCCESS_COUNT'/'$TOTAL_COUNT' passed)'
+          elif [[ "$SUCCESS_COUNT" -eq "$TOTAL_COUNT" ]] && [[ "$TOTAL_COUNT" -gt 0 ]]; then
+            OVERALL_STATUS=$'\u2705 All tests passed ('$TOTAL_COUNT'/'$TOTAL_COUNT')'
+          else
+            OVERALL_STATUS=$'\u2753 Tests status unknown'
+          fi
+
+          # Build message
+          MESSAGE=$(printf $'\uD83D\uDCCA *Windows Test Run Summary*\n\n*Workflow:* %s\n*Provider:* example\n*Stand:* %s\n*Status:* %s\n\n---\n\n*Chunk Jobs:*\n%s\n\n---\n\n[View Merge Job](%s)\n[View Full Workflow Run](%s)' \
+            "${{ github.workflow }}" \
+            "${{ github.event.inputs.url }}" \
+            "${OVERALL_STATUS}" \
+            "${CHUNKS_OUTPUT}" \
+            "${{ steps.collect-chunks.outputs.merge_url }}" \
+            "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}")
+
+          # Add ReportPortal URL if available
+          if [[ -n "${{ needs.merge-launches-windows.outputs.rp_launch_url }}" ]]; then
+            MESSAGE=$(printf "%s\n[View Report Portal](%s)" "${MESSAGE}" "${{ needs.merge-launches-windows.outputs.rp_launch_url }}")
+          fi
+
+          # Escape quotes for JSON
+          MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')
+
+          # Send to Telegram
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"chat_id\": \"${{ secrets.TELEGRAM_TO }}\",
+              \"text\": \"$MESSAGE\",
+              \"parse_mode\": \"Markdown\",
+              \"disable_notification\": true,
+              \"disable_web_page_preview\": true
+            }"
+
+  final-summary-linux:
+    name: Linux Test Summary
+    needs: [run-tests-linux, merge-launches-linux]
+    runs-on: ubuntu-latest
+    if: "!cancelled()"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Collect Linux chunk jobs info
+        id: collect-chunks
+        shell: bash
+        run: |
+          # Get all jobs for this workflow run
+          JOBS_JSON=$(gh run view ${{ github.run_id }} --json jobs | jq '.jobs')
+
+          # Collect Linux chunk jobs
+          CHUNKS=$(echo "$JOBS_JSON" | jq -r '[.[] | select(.name | startswith("Linux - Chunk"))] | map({name: .name, status: .status, conclusion: .conclusion, id: .databaseId, url: .url}) | @json')
+          echo "chunks=$CHUNKS" >> $GITHUB_OUTPUT
+
+          # Get merge job URL
+          MERGE_URL=$(echo "$JOBS_JSON" | jq -r '.[] | select(.name == "Merge Linux Launches") | .url')
+          echo "merge_url=$MERGE_URL" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.READ_PAT }}
+
+      - name: Send comprehensive Telegram notification
+        if: always()
+        shell: bash
+        run: |
+          # Function to format chunk jobs
+          format_chunks() {
+            local chunks_json="$1"
+
+            if [[ "$chunks_json" == "[]" || -z "$chunks_json" ]]; then
+              echo "  No chunks found"
+              return
+            fi
+
+            echo "$chunks_json" | jq -r '.[] |
+              if .conclusion == "success" then "  \u2705 "
+              elif .conclusion == "failure" then "  \u274C "
+              elif .conclusion == "cancelled" then "  \u1F6AB "
+              elif .conclusion == "skipped" then "  \u23ED\uFE0F "
+              else "  \u2753 " end +
+              "[" + .name + "](" + .url + ")"'
+          }
+
+          CHUNKS_OUTPUT=$(format_chunks '${{ steps.collect-chunks.outputs.chunks }}')
+
+          # Determine overall status by checking chunk conclusions
+          FAILED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "failure")] | length')
+          CANCELLED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "cancelled")] | length')
+          SUCCESS_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "success")] | length')
+          TOTAL_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq 'length')
+
+          if [[ "$FAILED_COUNT" -gt 0 ]]; then
+            OVERALL_STATUS=$'\u274C Tests failed ('$SUCCESS_COUNT'/'$TOTAL_COUNT' passed)'
+          elif [[ "$CANCELLED_COUNT" -gt 0 ]]; then
+            OVERALL_STATUS=$'\u1F6AB Some tests cancelled ('$SUCCESS_COUNT'/'$TOTAL_COUNT' passed)'
+          elif [[ "$SUCCESS_COUNT" -eq "$TOTAL_COUNT" ]] && [[ "$TOTAL_COUNT" -gt 0 ]]; then
+            OVERALL_STATUS=$'\u2705 All tests passed ('$TOTAL_COUNT'/'$TOTAL_COUNT')'
+          else
+            OVERALL_STATUS=$'\u2753 Tests status unknown'
+          fi
+
+          # Build message
+          MESSAGE=$(printf $'\uD83D\uDCCA *Linux Test Run Summary*\n\n*Workflow:* %s\n*Provider:* example\n*Stand:* %s\n*Status:* %s\n\n---\n\n*Chunk Jobs:*\n%s\n\n---\n\n[View Merge Job](%s)\n[View Full Workflow Run](%s)' \
+            "${{ github.workflow }}" \
+            "${{ github.event.inputs.url }}" \
+            "${OVERALL_STATUS}" \
+            "${CHUNKS_OUTPUT}" \
+            "${{ steps.collect-chunks.outputs.merge_url }}" \
+            "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}")
+
+          # Add ReportPortal URL if available
+          if [[ -n "${{ needs.merge-launches-linux.outputs.rp_launch_url }}" ]]; then
+            MESSAGE=$(printf "%s\n[View Report Portal](%s)" "${MESSAGE}" "${{ needs.merge-launches-linux.outputs.rp_launch_url }}")
+          fi
+
+          # Escape quotes for JSON
+          MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')
+
+          # Send to Telegram
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"chat_id\": \"${{ secrets.TELEGRAM_TO }}\",
+              \"text\": \"$MESSAGE\",
+              \"parse_mode\": \"Markdown\",
+              \"disable_notification\": true,
+              \"disable_web_page_preview\": true
+            }"
+
+  final-summary-macos:
+    name: macOS Test Summary
+    needs: [run-tests-macos, merge-launches-macos]
+    runs-on: ubuntu-latest
+    if: "!cancelled()"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Collect macOS chunk jobs info
+        id: collect-chunks
+        shell: bash
+        run: |
+          # Get all jobs for this workflow run
+          JOBS_JSON=$(gh run view ${{ github.run_id }} --json jobs | jq '.jobs')
+
+          # Collect macOS chunk jobs
+          CHUNKS=$(echo "$JOBS_JSON" | jq -r '[.[] | select(.name | startswith("macOS - Chunk"))] | map({name: .name, status: .status, conclusion: .conclusion, id: .databaseId, url: .url}) | @json')
+          echo "chunks=$CHUNKS" >> $GITHUB_OUTPUT
+
+          # Get merge job URL
+          MERGE_URL=$(echo "$JOBS_JSON" | jq -r '.[] | select(.name == "Merge macOS Launches") | .url')
+          echo "merge_url=$MERGE_URL" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.READ_PAT }}
+
+      - name: Send comprehensive Telegram notification
+        if: always()
+        shell: bash
+        run: |
+          # Function to format chunk jobs
+          format_chunks() {
+            local chunks_json="$1"
+
+            if [[ "$chunks_json" == "[]" || -z "$chunks_json" ]]; then
+              echo "  No chunks found"
+              return
+            fi
+
+            echo "$chunks_json" | jq -r '.[] |
+              if .conclusion == "success" then "  \u2705 "
+              elif .conclusion == "failure" then "  \u274C "
+              elif .conclusion == "cancelled" then "  \u1F6AB "
+              elif .conclusion == "skipped" then "  \u23ED\uFE0F "
+              else "  \u2753 " end +
+              "[" + .name + "](" + .url + ")"'
+          }
+
+          CHUNKS_OUTPUT=$(format_chunks '${{ steps.collect-chunks.outputs.chunks }}')
+
+          # Determine overall status by checking chunk conclusions
+          FAILED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "failure")] | length')
+          CANCELLED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "cancelled")] | length')
+          SUCCESS_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "success")] | length')
+          TOTAL_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq 'length')
+
+          if [[ "$FAILED_COUNT" -gt 0 ]]; then
+            OVERALL_STATUS=$'\u274C Tests failed ('$SUCCESS_COUNT'/'$TOTAL_COUNT' passed)'
+          elif [[ "$CANCELLED_COUNT" -gt 0 ]]; then
+            OVERALL_STATUS=$'\u1F6AB Some tests cancelled ('$SUCCESS_COUNT'/'$TOTAL_COUNT' passed)'
+          elif [[ "$SUCCESS_COUNT" -eq "$TOTAL_COUNT" ]] && [[ "$TOTAL_COUNT" -gt 0 ]]; then
+            OVERALL_STATUS=$'\u2705 All tests passed ('$TOTAL_COUNT'/'$TOTAL_COUNT')'
+          else
+            OVERALL_STATUS=$'\u2753 Tests status unknown'
+          fi
+
+          # Build message
+          MESSAGE=$(printf $'\uD83D\uDCCA *macOS Test Run Summary*\n\n*Workflow:* %s\n*Provider:* example\n*Stand:* %s\n*Status:* %s\n\n---\n\n*Chunk Jobs:*\n%s\n\n---\n\n[View Merge Job](%s)\n[View Full Workflow Run](%s)' \
+            "${{ github.workflow }}" \
+            "${{ github.event.inputs.url }}" \
+            "${OVERALL_STATUS}" \
+            "${CHUNKS_OUTPUT}" \
+            "${{ steps.collect-chunks.outputs.merge_url }}" \
+            "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}")
+
+          # Add ReportPortal URL if available
+          if [[ -n "${{ needs.merge-launches-macos.outputs.rp_launch_url }}" ]]; then
+            MESSAGE=$(printf "%s\n[View Report Portal](%s)" "${MESSAGE}" "${{ needs.merge-launches-macos.outputs.rp_launch_url }}")
+          fi
+
+          # Escape quotes for JSON
+          MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')
+
+          # Send to Telegram
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"chat_id\": \"${{ secrets.TELEGRAM_TO }}\",
+              \"text\": \"$MESSAGE\",
+              \"parse_mode\": \"Markdown\",
+              \"disable_notification\": true,
+              \"disable_web_page_preview\": true
+            }"
