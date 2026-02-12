@@ -11,6 +11,7 @@ inputs:
   chunk_size:
     description: 'Size of each chunk'
     required: true
+
   os_name:
     description: 'Operating system name (windows, linux, macos)'
     required: true

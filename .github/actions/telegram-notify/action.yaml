@@ -75,7 +75,7 @@ runs:
 
         if [[ -n "${{ inputs.rp_url }}" ]]; then
           MESSAGE="${MESSAGE}
-        [View Report](${{ inputs.rp_url }})"
+        [View Report Portal](${{ inputs.rp_url }})"
         fi
 
         MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')

@@ -76,7 +76,7 @@ jobs:
 
   collect-uuids-windows:
     name: Collect Windows UUIDs
-    needs: [prepare, run-tests-windows]
+    needs: [run-tests-windows]
     runs-on: ubuntu-latest
     if: "!cancelled()"
     outputs:
@@ -94,7 +94,7 @@ jobs:
 
   merge-launches-windows:
     name: Merge Windows Launches
-    needs: [run-tests-windows, collect-uuids-windows]
+    needs: [collect-uuids-windows]
     runs-on: ubuntu-latest
     if: "!cancelled()"
     outputs:
@@ -113,29 +113,6 @@ jobs:
           api-key: ${{ secrets.REPORT_KEY }}
           project-name: docsserver
           github-token: ${{ secrets.READ_PAT }}
-
-      - name: Get Job ID
-        if: always()
-        id: job-id
-        shell: bash
-        run: |
-            JOB_NAME="Merge Windows Launches"
-            JOB_ID=$(gh run view ${{ github.run_id }} --json jobs | jq -r --arg name "$JOB_NAME" '.jobs[] | select(.name == $name and .status != "queued") | .databaseId' | head -1)
-            echo "job-id=$JOB_ID" >> $GITHUB_OUTPUT
-        env:
-            GITHUB_TOKEN: ${{ github.token }}
-
-      - name: Send Telegram notification
-        if: always()
-        uses: ./.github/actions/telegram-notify
-        with:
-          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
-          telegram_to: ${{ secrets.TELEGRAM_TO }}
-          os_name: windows
-          provider: example
-          job_status: ${{ needs.run-tests-windows.result == 'failure' && 'failure' || job.status }}
-          job_id: ${{ steps.job-id.outputs.job-id }}
-          rp_url: ${{ steps.merge.outputs.rp_launch_url }}
 
   run-tests-linux:
     name: Linux - Chunk ${{ matrix.chunk }}
@@ -169,7 +146,7 @@ jobs:
 
   collect-uuids-linux:
     name: Collect Linux UUIDs
-    needs: [prepare, run-tests-linux]
+    needs: [run-tests-linux]
     runs-on: ubuntu-latest
     if: "!cancelled()"
     outputs:
@@ -187,7 +164,7 @@ jobs:
 
   merge-launches-linux:
     name: Merge Linux Launches
-    needs: [run-tests-linux, collect-uuids-linux]
+    needs: [collect-uuids-linux]
     runs-on: ubuntu-latest
     if: "!cancelled()"
     outputs:
@@ -206,29 +183,6 @@ jobs:
           api-key: ${{ secrets.REPORT_KEY }}
           project-name: docsserver
           github-token: ${{ secrets.READ_PAT }}
-
-      - name: Get Job ID
-        if: always()
-        id: job-id
-        shell: bash
-        run: |
-            JOB_NAME="Merge Linux Launches"
-            JOB_ID=$(gh run view ${{ github.run_id }} --json jobs | jq -r --arg name "$JOB_NAME" '.jobs[] | select(.name == $name and .status != "queued") | .databaseId' | head -1)
-            echo "job-id=$JOB_ID" >> $GITHUB_OUTPUT
-        env:
-            GITHUB_TOKEN: ${{ github.token }}
-
-      - name: Send Telegram notification
-        if: always()
-        uses: ./.github/actions/telegram-notify
-        with:
-          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
-          telegram_to: ${{ secrets.TELEGRAM_TO }}
-          os_name: linux
-          provider: example
-          job_status: ${{ needs.run-tests-linux.result == 'failure' && 'failure' || job.status }}
-          job_id: ${{ steps.job-id.outputs.job-id }}
-          rp_url: ${{ steps.merge.outputs.rp_launch_url }}
 
   run-tests-macos:
     name: macOS - Chunk ${{ matrix.chunk }}
@@ -262,7 +216,7 @@ jobs:
 
   collect-uuids-macos:
     name: Collect macOS UUIDs
-    needs: [prepare, run-tests-macos]
+    needs: [run-tests-macos]
     runs-on: ubuntu-latest
     if: "!cancelled()"
     outputs:
@@ -280,7 +234,7 @@ jobs:
 
   merge-launches-macos:
     name: Merge macOS Launches
-    needs: [run-tests-macos, collect-uuids-macos]
+    needs: [collect-uuids-macos]
     runs-on: ubuntu-latest
     if: "!cancelled()"
     outputs:
@@ -300,32 +254,9 @@ jobs:
           project-name: docsserver
           github-token: ${{ secrets.READ_PAT }}
 
-      - name: Get Job ID
-        if: always()
-        id: job-id
-        shell: bash
-        run: |
-            JOB_NAME="Merge macOS Launches"
-            JOB_ID=$(gh run view ${{ github.run_id }} --json jobs | jq -r --arg name "$JOB_NAME" '.jobs[] | select(.name == $name and .status != "queued") | .databaseId' | head -1)
-            echo "job-id=$JOB_ID" >> $GITHUB_OUTPUT
-        env:
-            GITHUB_TOKEN: ${{ github.token }}
-
-      - name: Send Telegram notification
-        if: always()
-        uses: ./.github/actions/telegram-notify
-        with:
-          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
-          telegram_to: ${{ secrets.TELEGRAM_TO }}
-          os_name: macos
-          provider: example
-          job_status: ${{ needs.run-tests-macos.result == 'failure' && 'failure' || job.status }}
-          job_id: ${{ steps.job-id.outputs.job-id }}
-          rp_url: ${{ steps.merge.outputs.rp_launch_url }}
-
   final-summary-windows:
     name: Windows Test Summary
-    needs: [run-tests-windows, merge-launches-windows]
+    needs: [merge-launches-windows]
     runs-on: ubuntu-latest
     if: "!cancelled()"
 
@@ -363,7 +294,7 @@ jobs:
               return
             fi
 
-            echo "$chunks_json" | jq -r '.[] |
+            echo "$chunks_json" | jq -r 'sort_by(.name) | .[] |
               if .conclusion == "success" then "  \u2705 "
               elif .conclusion == "failure" then "  \u274C "
               elif .conclusion == "cancelled" then "  \u1F6AB "
@@ -381,27 +312,29 @@ jobs:
           TOTAL_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq 'length')
 
           if [[ "$FAILED_COUNT" -gt 0 ]]; then
-            OVERALL_STATUS=$'\u274C Tests failed ('$SUCCESS_COUNT'/'$TOTAL_COUNT' passed)'
+            OVERALL_STATUS="\u274C Chunks failed (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
           elif [[ "$CANCELLED_COUNT" -gt 0 ]]; then
-            OVERALL_STATUS=$'\u1F6AB Some tests cancelled ('$SUCCESS_COUNT'/'$TOTAL_COUNT' passed)'
+            OVERALL_STATUS="\u1F6AB Some chunks cancelled (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
           elif [[ "$SUCCESS_COUNT" -eq "$TOTAL_COUNT" ]] && [[ "$TOTAL_COUNT" -gt 0 ]]; then
-            OVERALL_STATUS=$'\u2705 All tests passed ('$TOTAL_COUNT'/'$TOTAL_COUNT')'
+            OVERALL_STATUS="\u2705 All chunks passed (${TOTAL_COUNT}/${TOTAL_COUNT})"
           else
-            OVERALL_STATUS=$'\u2753 Tests status unknown'
+            OVERALL_STATUS="\u2753 Chunks status unknown"
           fi
 
           # Build message
-          MESSAGE=$(printf $'\uD83D\uDCCA *Windows Test Run Summary*\n\n*Workflow:* %s\n*Provider:* example\n*Stand:* %s\n*Status:* %s\n\n---\n\n*Chunk Jobs:*\n%s\n\n---\n\n[View Merge Job](%s)\n[View Full Workflow Run](%s)' \
-            "${{ github.workflow }}" \
-            "${{ github.event.inputs.url }}" \
-            "${OVERALL_STATUS}" \
-            "${CHUNKS_OUTPUT}" \
-            "${{ steps.collect-chunks.outputs.merge_url }}" \
-            "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}")
+          MESSAGE="${MESSAGE}\n*Workflow:* ${{ github.workflow }}"
+          MESSAGE="${MESSAGE}\n*Provider:* example"
+          MESSAGE="${MESSAGE}\n*Stand:* ${{ github.event.inputs.url }}"
+          MESSAGE="${MESSAGE}\n*Status:* ${OVERALL_STATUS}"
+          MESSAGE="${MESSAGE}\n*Chunk Jobs:*"
+          MESSAGE="${MESSAGE}\n${CHUNKS_OUTPUT}"
+          MESSAGE="${MESSAGE}\n"
+          MESSAGE="${MESSAGE}\n[View Merge Job](${{ steps.collect-chunks.outputs.merge_url }})"
+          MESSAGE="${MESSAGE}\n[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
 
           # Add ReportPortal URL if available
           if [[ -n "${{ needs.merge-launches-windows.outputs.rp_launch_url }}" ]]; then
-            MESSAGE=$(printf "%s\n[View Report Portal](%s)" "${MESSAGE}" "${{ needs.merge-launches-windows.outputs.rp_launch_url }}")
+            MESSAGE="${MESSAGE}\n[View Report Portal](${{ needs.merge-launches-windows.outputs.rp_launch_url }})"
           fi
 
           # Escape quotes for JSON
@@ -420,7 +353,7 @@ jobs:
 
   final-summary-linux:
     name: Linux Test Summary
-    needs: [run-tests-linux, merge-launches-linux]
+    needs: [merge-launches-linux]
     runs-on: ubuntu-latest
     if: "!cancelled()"
 
@@ -458,7 +391,7 @@ jobs:
               return
             fi
 
-            echo "$chunks_json" | jq -r '.[] |
+            echo "$chunks_json" | jq -r 'sort_by(.name) | .[] |
               if .conclusion == "success" then "  \u2705 "
               elif .conclusion == "failure" then "  \u274C "
               elif .conclusion == "cancelled" then "  \u1F6AB "
@@ -476,27 +409,29 @@ jobs:
           TOTAL_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq 'length')
 
           if [[ "$FAILED_COUNT" -gt 0 ]]; then
-            OVERALL_STATUS=$'\u274C Tests failed ('$SUCCESS_COUNT'/'$TOTAL_COUNT' passed)'
+            OVERALL_STATUS="\u274C Chunks failed (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
           elif [[ "$CANCELLED_COUNT" -gt 0 ]]; then
-            OVERALL_STATUS=$'\u1F6AB Some tests cancelled ('$SUCCESS_COUNT'/'$TOTAL_COUNT' passed)'
+            OVERALL_STATUS="\u1F6AB Some chunks cancelled (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
           elif [[ "$SUCCESS_COUNT" -eq "$TOTAL_COUNT" ]] && [[ "$TOTAL_COUNT" -gt 0 ]]; then
-            OVERALL_STATUS=$'\u2705 All tests passed ('$TOTAL_COUNT'/'$TOTAL_COUNT')'
+            OVERALL_STATUS="\u2705 All chunks passed (${TOTAL_COUNT}/${TOTAL_COUNT})"
           else
-            OVERALL_STATUS=$'\u2753 Tests status unknown'
+            OVERALL_STATUS="\u2753 Chunks status unknown"
           fi
 
           # Build message
-          MESSAGE=$(printf $'\uD83D\uDCCA *Linux Test Run Summary*\n\n*Workflow:* %s\n*Provider:* example\n*Stand:* %s\n*Status:* %s\n\n---\n\n*Chunk Jobs:*\n%s\n\n---\n\n[View Merge Job](%s)\n[View Full Workflow Run](%s)' \
-            "${{ github.workflow }}" \
-            "${{ github.event.inputs.url }}" \
-            "${OVERALL_STATUS}" \
-            "${CHUNKS_OUTPUT}" \
-            "${{ steps.collect-chunks.outputs.merge_url }}" \
-            "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}")
+          MESSAGE="${MESSAGE}\n*Workflow:* ${{ github.workflow }}"
+          MESSAGE="${MESSAGE}\n*Provider:* example"
+          MESSAGE="${MESSAGE}\n*Stand:* ${{ github.event.inputs.url }}"
+          MESSAGE="${MESSAGE}\n*Status:* ${OVERALL_STATUS}"
+          MESSAGE="${MESSAGE}\n*Chunk Jobs:*"
+          MESSAGE="${MESSAGE}\n${CHUNKS_OUTPUT}"
+          MESSAGE="${MESSAGE}\n"
+          MESSAGE="${MESSAGE}\n[View Merge Job](${{ steps.collect-chunks.outputs.merge_url }})"
+          MESSAGE="${MESSAGE}\n[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
 
           # Add ReportPortal URL if available
           if [[ -n "${{ needs.merge-launches-linux.outputs.rp_launch_url }}" ]]; then
-            MESSAGE=$(printf "%s\n[View Report Portal](%s)" "${MESSAGE}" "${{ needs.merge-launches-linux.outputs.rp_launch_url }}")
+            MESSAGE="${MESSAGE}\n[View Report Portal](${{ needs.merge-launches-linux.outputs.rp_launch_url }})"
           fi
 
           # Escape quotes for JSON
@@ -515,7 +450,7 @@ jobs:
 
   final-summary-macos:
     name: macOS Test Summary
-    needs: [run-tests-macos, merge-launches-macos]
+    needs: [merge-launches-macos]
     runs-on: ubuntu-latest
     if: "!cancelled()"
 
@@ -553,7 +488,7 @@ jobs:
               return
             fi
 
-            echo "$chunks_json" | jq -r '.[] |
+            echo "$chunks_json" | jq -r 'sort_by(.name) | .[] |
               if .conclusion == "success" then "  \u2705 "
               elif .conclusion == "failure" then "  \u274C "
               elif .conclusion == "cancelled" then "  \u1F6AB "
@@ -571,27 +506,29 @@ jobs:
           TOTAL_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq 'length')
 
           if [[ "$FAILED_COUNT" -gt 0 ]]; then
-            OVERALL_STATUS=$'\u274C Tests failed ('$SUCCESS_COUNT'/'$TOTAL_COUNT' passed)'
+            OVERALL_STATUS="\u274C Chunks failed (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
           elif [[ "$CANCELLED_COUNT" -gt 0 ]]; then
-            OVERALL_STATUS=$'\u1F6AB Some tests cancelled ('$SUCCESS_COUNT'/'$TOTAL_COUNT' passed)'
+            OVERALL_STATUS="\u1F6AB Some chunks cancelled (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
           elif [[ "$SUCCESS_COUNT" -eq "$TOTAL_COUNT" ]] && [[ "$TOTAL_COUNT" -gt 0 ]]; then
-            OVERALL_STATUS=$'\u2705 All tests passed ('$TOTAL_COUNT'/'$TOTAL_COUNT')'
+            OVERALL_STATUS="\u2705 All chunks passed (${TOTAL_COUNT}/${TOTAL_COUNT})"
           else
-            OVERALL_STATUS=$'\u2753 Tests status unknown'
+            OVERALL_STATUS="\u2753 Chunks status unknown"
           fi
 
           # Build message
-          MESSAGE=$(printf $'\uD83D\uDCCA *macOS Test Run Summary*\n\n*Workflow:* %s\n*Provider:* example\n*Stand:* %s\n*Status:* %s\n\n---\n\n*Chunk Jobs:*\n%s\n\n---\n\n[View Merge Job](%s)\n[View Full Workflow Run](%s)' \
-            "${{ github.workflow }}" \
-            "${{ github.event.inputs.url }}" \
-            "${OVERALL_STATUS}" \
-            "${CHUNKS_OUTPUT}" \
-            "${{ steps.collect-chunks.outputs.merge_url }}" \
-            "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}")
+          MESSAGE="${MESSAGE}\n*Workflow:* ${{ github.workflow }}"
+          MESSAGE="${MESSAGE}\n*Provider:* example"
+          MESSAGE="${MESSAGE}\n*Stand:* ${{ github.event.inputs.url }}"
+          MESSAGE="${MESSAGE}\n*Status:* ${OVERALL_STATUS}"
+          MESSAGE="${MESSAGE}\n*Chunk Jobs:*"
+          MESSAGE="${MESSAGE}\n${CHUNKS_OUTPUT}"
+          MESSAGE="${MESSAGE}\n"
+          MESSAGE="${MESSAGE}\n[View Merge Job](${{ steps.collect-chunks.outputs.merge_url }})"
+          MESSAGE="${MESSAGE}\n[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
 
           # Add ReportPortal URL if available
           if [[ -n "${{ needs.merge-launches-macos.outputs.rp_launch_url }}" ]]; then
-            MESSAGE=$(printf "%s\n[View Report Portal](%s)" "${MESSAGE}" "${{ needs.merge-launches-macos.outputs.rp_launch_url }}")
+            MESSAGE="${MESSAGE}\n[View Report Portal](${{ needs.merge-launches-macos.outputs.rp_launch_url }})"
           fi
 
           # Escape quotes for JSON
