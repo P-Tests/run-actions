@@ -39,7 +39,13 @@ jobs:
             - name: Get Job ID
               if: always()
               id: job-id
-              uses: austenstone/job-id@v1
+              shell: bash
+              run: |
+                  JOB_NAME="DocSpace EU - ${{ matrix.os.name }}"
+                  JOB_ID=$(gh run view ${{ github.run_id }} --json jobs | jq -r --arg name "$JOB_NAME" '.jobs[] | select(.name == $name) | .databaseId')
+                  echo "job-id=$JOB_ID" >> $GITHUB_OUTPUT
+              env:
+                  GITHUB_TOKEN: ${{ github.token }}
 
             - name: Send message to Telegram
               if: always()
@@ -87,7 +93,13 @@ jobs:
             - name: Get Job ID
               if: always()
               id: job-id
-              uses: austenstone/job-id@v1
+              shell: bash
+              run: |
+                  JOB_NAME="DocSpace US - ${{ matrix.os.name }}"
+                  JOB_ID=$(gh run view ${{ github.run_id }} --json jobs | jq -r --arg name "$JOB_NAME" '.jobs[] | select(.name == $name) | .databaseId')
+                  echo "job-id=$JOB_ID" >> $GITHUB_OUTPUT
+              env:
+                  GITHUB_TOKEN: ${{ github.token }}
 
             - name: Send message to Telegram
               if: always()
@@ -137,7 +149,13 @@ jobs:
             - name: Get Job ID
               if: always()
               id: job-id
-              uses: austenstone/job-id@v1
+              shell: bash
+              run: |
+                  JOB_NAME="NCOC - ${{ matrix.os.name }}"
+                  JOB_ID=$(gh run view ${{ github.run_id }} --json jobs | jq -r --arg name "$JOB_NAME" '.jobs[] | select(.name == $name) | .databaseId')
+                  echo "job-id=$JOB_ID" >> $GITHUB_OUTPUT
+              env:
+                  GITHUB_TOKEN: ${{ github.token }}
 
             - name: Send message to Telegram
               if: always()
@@ -187,7 +205,13 @@ jobs:
             - name: Get Job ID
               if: always()
               id: job-id
-              uses: austenstone/job-id@v1
+              shell: bash
+              run: |
+                  JOB_NAME="OCIS - ${{ matrix.os.name }}"
+                  JOB_ID=$(gh run view ${{ github.run_id }} --json jobs | jq -r --arg name "$JOB_NAME" '.jobs[] | select(.name == $name) | .databaseId')
+                  echo "job-id=$JOB_ID" >> $GITHUB_OUTPUT
+              env:
+                  GITHUB_TOKEN: ${{ github.token }}
 
             - name: Send message to Telegram
               if: always()
@@ -237,7 +261,13 @@ jobs:
             - name: Get Job ID
               if: always()
               id: job-id
-              uses: austenstone/job-id@v1
+              shell: bash
+              run: |
+                  JOB_NAME="WOPI - ${{ matrix.os.name }}"
+                  JOB_ID=$(gh run view ${{ github.run_id }} --json jobs | jq -r --arg name "$JOB_NAME" '.jobs[] | select(.name == $name) | .databaseId')
+                  echo "job-id=$JOB_ID" >> $GITHUB_OUTPUT
+              env:
+                  GITHUB_TOKEN: ${{ github.token }}
 
             - name: Send message to Telegram
               if: always()
@@ -287,7 +317,13 @@ jobs:
             - name: Get Job ID
               if: always()
               id: job-id
-              uses: austenstone/job-id@v1
+              shell: bash
+              run: |
+                  JOB_NAME="Example - ${{ matrix.os.name }}"
+                  JOB_ID=$(gh run view ${{ github.run_id }} --json jobs | jq -r --arg name "$JOB_NAME" '.jobs[] | select(.name == $name) | .databaseId')
+                  echo "job-id=$JOB_ID" >> $GITHUB_OUTPUT
+              env:
+                  GITHUB_TOKEN: ${{ github.token }}
 
             - name: Send message to Telegram
               if: always()
