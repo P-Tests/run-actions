@@ -24,41 +24,41 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-            - name: Run Puppeteer Tests
-              id: test-run
-              uses: ./.github/actions/puppeteer-simple-test
-              with:
-                  provider: "docspaceEU"
-                  project_name: "docsserver-daily"
-                  suite: "daily"
-                  launch_name: "Daily Tests"
-                  os_name: ${{ matrix.os.name }}
-                  read_pat: ${{ secrets.READ_PAT }}
-                  report_key: ${{ secrets.REPORT_KEY }}
+      - name: Run Puppeteer Tests
+        id: test-run
+        uses: ./.github/actions/puppeteer-simple-test
+        with:
+          provider: "docspaceEU"
+          project_name: "docsserver-daily"
+          suite: "daily"
+          launch_name: "Daily Tests"
+          os_name: ${{ matrix.os.name }}
+          read_pat: ${{ secrets.READ_PAT }}
+          report_key: ${{ secrets.REPORT_KEY }}
 
-            - name: Get Job ID
-              if: always()
-              id: job-id
-              shell: bash
-              run: |
-                  JOB_NAME="DocSpace EU - ${{ matrix.os.name }}"
-                  JOB_ID=$(gh run view ${{ github.run_id }} --json jobs | jq -r --arg name "$JOB_NAME" '.jobs[] | select(.name == $name) | .databaseId')
-                  echo "job-id=$JOB_ID" >> $GITHUB_OUTPUT
-              env:
-                  GITHUB_TOKEN: ${{ github.token }}
+      - name: Get Job ID
+        if: always()
+        id: job-id
+        shell: bash
+        run: |
+          JOB_NAME="DocSpace EU - ${{ matrix.os.name }}"
+          JOB_ID=$(gh run view ${{ github.run_id }} --json jobs | jq -r --arg name "$JOB_NAME" '.jobs[] | select(.name == $name) | .databaseId')
+          echo "job-id=$JOB_ID" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
 
-            - name: Send message to Telegram
-              if: always()
-              uses: ./.github/actions/telegram-notify
-              with:
-                  telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
-                  telegram_to: ${{ secrets.TELEGRAM_TO }}
-                  os_name: ${{ matrix.os.name }}
-                  provider: "docspaceEU"
-                  job_status: ${{ job.status }}
-                  job_id: ${{ steps.job-id.outputs.job-id }}
-                  rp_url: ${{ steps.test-run.outputs.rp_launch_url }}
->>>>>>> 8bac557 (add set ReportPortal launch URL in tg message)
+      - name: Send message to Telegram
+        if: always()
+        uses: ./.github/actions/telegram-notify
+        with:
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_TO }}
+          os_name: ${{ matrix.os.name }}
+          provider: "docspaceEU"
+          job_status: ${{ job.status }}
+          job_id: ${{ steps.job-id.outputs.job-id }}
+          rp_url: ${{ steps.test-run.outputs.rp_launch_url }}
+
 
   test-docspaceUS:
     name: DocSpace US - ${{ matrix.os.name }}
@@ -78,262 +78,262 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-            - name: Run Puppeteer Tests
-              id: test-run
-              uses: ./.github/actions/puppeteer-simple-test
-              with:
-                  provider: "docspaceUS"
-                  project_name: "docsserver-daily"
-                  suite: "daily"
-                  launch_name: "Daily Tests"
-                  os_name: ${{ matrix.os.name }}
-                  read_pat: ${{ secrets.READ_PAT }}
-                  report_key: ${{ secrets.REPORT_KEY }}
+      - name: Run Puppeteer Tests
+        id: test-run
+        uses: ./.github/actions/puppeteer-simple-test
+        with:
+          provider: "docspaceUS"
+          project_name: "docsserver-daily"
+          suite: "daily"
+          launch_name: "Daily Tests"
+          os_name: ${{ matrix.os.name }}
+          read_pat: ${{ secrets.READ_PAT }}
+          report_key: ${{ secrets.REPORT_KEY }}
 
-            - name: Get Job ID
-              if: always()
-              id: job-id
-              shell: bash
-              run: |
-                  JOB_NAME="DocSpace US - ${{ matrix.os.name }}"
-                  JOB_ID=$(gh run view ${{ github.run_id }} --json jobs | jq -r --arg name "$JOB_NAME" '.jobs[] | select(.name == $name) | .databaseId')
-                  echo "job-id=$JOB_ID" >> $GITHUB_OUTPUT
-              env:
-                  GITHUB_TOKEN: ${{ github.token }}
+      - name: Get Job ID
+        if: always()
+        id: job-id
+        shell: bash
+        run: |
+          JOB_NAME="DocSpace US - ${{ matrix.os.name }}"
+          JOB_ID=$(gh run view ${{ github.run_id }} --json jobs | jq -r --arg name "$JOB_NAME" '.jobs[] | select(.name == $name) | .databaseId')
+          echo "job-id=$JOB_ID" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
 
-            - name: Send message to Telegram
-              if: always()
-              uses: ./.github/actions/telegram-notify
-              with:
-                  telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
-                  telegram_to: ${{ secrets.TELEGRAM_TO }}
-                  os_name: ${{ matrix.os.name }}
-                  provider: "docspaceUS"
-                  job_status: ${{ job.status }}
-                  job_id: ${{ steps.job-id.outputs.job-id }}
-                  rp_url: ${{ steps.test-run.outputs.rp_launch_url }}
->>>>>>> 8bac557 (add set ReportPortal launch URL in tg message)
+      - name: Send message to Telegram
+        if: always()
+        uses: ./.github/actions/telegram-notify
+        with:
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_TO }}
+          os_name: ${{ matrix.os.name }}
+          provider: "docspaceUS"
+          job_status: ${{ job.status }}
+          job_id: ${{ steps.job-id.outputs.job-id }}
+          rp_url: ${{ steps.test-run.outputs.rp_launch_url }}
 
-    test-ncoc:
-        name: NCOC - ${{ matrix.os.name }}
-        needs: [test-docspaceEU, test-docspaceUS]
-        if: ${{ !cancelled() }}
-        runs-on: ${{ matrix.os.runner }}
-        strategy:
-            matrix:
-                os:
-                    - name: windows
-                      runner: windows-latest
-                    - name: linux
-                      runner: ubuntu-latest
-                    - name: macos
-                      runner: macos-latest
-            fail-fast: false
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-            - name: Run Puppeteer Tests
-              id: test-run
-              uses: ./.github/actions/puppeteer-simple-test
-              with:
-                  provider: "ncoc"
-                  project_name: "docsserver-daily"
-                  suite: "daily"
-                  launch_name: "Daily Tests"
-                  os_name: ${{ matrix.os.name }}
-                  read_pat: ${{ secrets.READ_PAT }}
-                  report_key: ${{ secrets.REPORT_KEY }}
-
-            - name: Get Job ID
-              if: always()
-              id: job-id
-              shell: bash
-              run: |
-                  JOB_NAME="NCOC - ${{ matrix.os.name }}"
-                  JOB_ID=$(gh run view ${{ github.run_id }} --json jobs | jq -r --arg name "$JOB_NAME" '.jobs[] | select(.name == $name) | .databaseId')
-                  echo "job-id=$JOB_ID" >> $GITHUB_OUTPUT
-              env:
-                  GITHUB_TOKEN: ${{ github.token }}
-
-            - name: Send message to Telegram
-              if: always()
-              uses: ./.github/actions/telegram-notify
-              with:
-                  telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
-                  telegram_to: ${{ secrets.TELEGRAM_TO }}
-                  os_name: ${{ matrix.os.name }}
-                  provider: "ncoc"
-                  job_status: ${{ job.status }}
-                  job_id: ${{ steps.job-id.outputs.job-id }}
-                  rp_url: ${{ steps.test-run.outputs.rp_launch_url }}
->>>>>>> 8bac557 (add set ReportPortal launch URL in tg message)
-
-    test-ocis:
-        name: OCIS - ${{ matrix.os.name }}
-        needs: test-ncoc
-        if: ${{ !cancelled() }}
-        runs-on: ${{ matrix.os.runner }}
-        strategy:
-            matrix:
-                os:
-                    - name: windows
-                      runner: windows-latest
-                    - name: linux
-                      runner: ubuntu-latest
-                    - name: macos
-                      runner: macos-latest
-            fail-fast: false
+  test-ncoc:
+    name: NCOC - ${{ matrix.os.name }}
+    needs: [test-docspaceEU, test-docspaceUS]
+    if: ${{ !cancelled() }}
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      matrix:
+        os:
+          - name: windows
+            runner: windows-latest
+          - name: linux
+            runner: ubuntu-latest
+          - name: macos
+            runner: macos-latest
+      fail-fast: false
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-            - name: Run Puppeteer Tests
-              id: test-run
-              uses: ./.github/actions/puppeteer-simple-test
-              with:
-                  provider: "ocis"
-                  project_name: "docsserver-daily"
-                  suite: "daily"
-                  launch_name: "Daily Tests"
-                  os_name: ${{ matrix.os.name }}
-                  read_pat: ${{ secrets.READ_PAT }}
-                  report_key: ${{ secrets.REPORT_KEY }}
+      - name: Run Puppeteer Tests
+        id: test-run
+        uses: ./.github/actions/puppeteer-simple-test
+        with:
+          provider: "ncoc"
+          project_name: "docsserver-daily"
+          suite: "daily"
+          launch_name: "Daily Tests"
+          os_name: ${{ matrix.os.name }}
+          read_pat: ${{ secrets.READ_PAT }}
+          report_key: ${{ secrets.REPORT_KEY }}
 
-            - name: Get Job ID
-              if: always()
-              id: job-id
-              shell: bash
-              run: |
-                  JOB_NAME="OCIS - ${{ matrix.os.name }}"
-                  JOB_ID=$(gh run view ${{ github.run_id }} --json jobs | jq -r --arg name "$JOB_NAME" '.jobs[] | select(.name == $name) | .databaseId')
-                  echo "job-id=$JOB_ID" >> $GITHUB_OUTPUT
-              env:
-                  GITHUB_TOKEN: ${{ github.token }}
+      - name: Get Job ID
+        if: always()
+        id: job-id
+        shell: bash
+        run: |
+          JOB_NAME="NCOC - ${{ matrix.os.name }}"
+          JOB_ID=$(gh run view ${{ github.run_id }} --json jobs | jq -r --arg name "$JOB_NAME" '.jobs[] | select(.name == $name) | .databaseId')
+          echo "job-id=$JOB_ID" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
 
-            - name: Send message to Telegram
-              if: always()
-              uses: ./.github/actions/telegram-notify
-              with:
-                  telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
-                  telegram_to: ${{ secrets.TELEGRAM_TO }}
-                  os_name: ${{ matrix.os.name }}
-                  provider: "ocis"
-                  job_status: ${{ job.status }}
-                  job_id: ${{ steps.job-id.outputs.job-id }}
-                  rp_url: ${{ steps.test-run.outputs.rp_launch_url }}
->>>>>>> 8bac557 (add set ReportPortal launch URL in tg message)
+      - name: Send message to Telegram
+        if: always()
+        uses: ./.github/actions/telegram-notify
+        with:
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_TO }}
+          os_name: ${{ matrix.os.name }}
+          provider: "ncoc"
+          job_status: ${{ job.status }}
+          job_id: ${{ steps.job-id.outputs.job-id }}
+          rp_url: ${{ steps.test-run.outputs.rp_launch_url }}
 
-    test-wopi:
-        name: WOPI - ${{ matrix.os.name }}
-        needs: test-ocis
-        if: ${{ !cancelled() }}
-        runs-on: ${{ matrix.os.runner }}
-        strategy:
-            matrix:
-                os:
-                    - name: windows
-                      runner: windows-latest
-                    - name: linux
-                      runner: ubuntu-latest
-                    - name: macos
-                      runner: macos-latest
-            fail-fast: false
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-            - name: Run Puppeteer Tests
-              id: test-run
-              uses: ./.github/actions/puppeteer-simple-test
-              with:
-                  provider: "wopi"
-                  project_name: "docsserver-daily"
-                  suite: "daily"
-                  launch_name: "Daily Tests"
-                  os_name: ${{ matrix.os.name }}
-                  read_pat: ${{ secrets.READ_PAT }}
-                  report_key: ${{ secrets.REPORT_KEY }}
-
-            - name: Get Job ID
-              if: always()
-              id: job-id
-              shell: bash
-              run: |
-                  JOB_NAME="WOPI - ${{ matrix.os.name }}"
-                  JOB_ID=$(gh run view ${{ github.run_id }} --json jobs | jq -r --arg name "$JOB_NAME" '.jobs[] | select(.name == $name) | .databaseId')
-                  echo "job-id=$JOB_ID" >> $GITHUB_OUTPUT
-              env:
-                  GITHUB_TOKEN: ${{ github.token }}
-
-            - name: Send message to Telegram
-              if: always()
-              uses: ./.github/actions/telegram-notify
-              with:
-                  telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
-                  telegram_to: ${{ secrets.TELEGRAM_TO }}
-                  os_name: ${{ matrix.os.name }}
-                  provider: "wopi"
-                  job_status: ${{ job.status }}
-                  job_id: ${{ steps.job-id.outputs.job-id }}
-                  rp_url: ${{ steps.test-run.outputs.rp_launch_url }}
->>>>>>> 8bac557 (add set ReportPortal launch URL in tg message)
-
-    test-example:
-        name: Example - ${{ matrix.os.name }}
-        needs: test-wopi
-        if: ${{ !cancelled() }}
-        runs-on: ${{ matrix.os.runner }}
-        strategy:
-            matrix:
-                os:
-                    - name: windows
-                      runner: windows-latest
-                    - name: linux
-                      runner: ubuntu-latest
-                    - name: macos
-                      runner: macos-latest
-            fail-fast: false
+  test-ocis:
+    name: OCIS - ${{ matrix.os.name }}
+    needs: test-ncoc
+    if: ${{ !cancelled() }}
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      matrix:
+        os:
+          - name: windows
+            runner: windows-latest
+          - name: linux
+            runner: ubuntu-latest
+          - name: macos
+            runner: macos-latest
+      fail-fast: false
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-            - name: Run Puppeteer Tests
-              id: test-run
-              uses: ./.github/actions/puppeteer-simple-test
-              with:
-                  provider: "example"
-                  project_name: "docsserver-daily"
-                  suite: "daily"
-                  launch_name: "Daily Tests"
-                  os_name: ${{ matrix.os.name }}
-                  read_pat: ${{ secrets.READ_PAT }}
-                  report_key: ${{ secrets.REPORT_KEY }}
+      - name: Run Puppeteer Tests
+        id: test-run
+        uses: ./.github/actions/puppeteer-simple-test
+        with:
+          provider: "ocis"
+          project_name: "docsserver-daily"
+          suite: "daily"
+          launch_name: "Daily Tests"
+          os_name: ${{ matrix.os.name }}
+          read_pat: ${{ secrets.READ_PAT }}
+          report_key: ${{ secrets.REPORT_KEY }}
 
-            - name: Get Job ID
-              if: always()
-              id: job-id
-              shell: bash
-              run: |
-                  JOB_NAME="Example - ${{ matrix.os.name }}"
-                  JOB_ID=$(gh run view ${{ github.run_id }} --json jobs | jq -r --arg name "$JOB_NAME" '.jobs[] | select(.name == $name) | .databaseId')
-                  echo "job-id=$JOB_ID" >> $GITHUB_OUTPUT
-              env:
-                  GITHUB_TOKEN: ${{ github.token }}
+      - name: Get Job ID
+        if: always()
+        id: job-id
+        shell: bash
+        run: |
+          JOB_NAME="OCIS - ${{ matrix.os.name }}"
+          JOB_ID=$(gh run view ${{ github.run_id }} --json jobs | jq -r --arg name "$JOB_NAME" '.jobs[] | select(.name == $name) | .databaseId')
+          echo "job-id=$JOB_ID" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
 
-            - name: Send message to Telegram
-              if: always()
-              uses: ./.github/actions/telegram-notify
-              with:
-                  telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
-                  telegram_to: ${{ secrets.TELEGRAM_TO }}
-                  os_name: ${{ matrix.os.name }}
-                  provider: "example"
-                  job_status: ${{ job.status }}
-                  job_id: ${{ steps.job-id.outputs.job-id }}
-                  rp_url: ${{ steps.test-run.outputs.rp_launch_url }}
->>>>>>> 8bac557 (add set ReportPortal launch URL in tg message)
+      - name: Send message to Telegram
+        if: always()
+        uses: ./.github/actions/telegram-notify
+        with:
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_TO }}
+          os_name: ${{ matrix.os.name }}
+          provider: "ocis"
+          job_status: ${{ job.status }}
+          job_id: ${{ steps.job-id.outputs.job-id }}
+          rp_url: ${{ steps.test-run.outputs.rp_launch_url }}
+
+
+  test-wopi:
+    name: WOPI - ${{ matrix.os.name }}
+    needs: test-ocis
+    if: ${{ !cancelled() }}
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      matrix:
+        os:
+          - name: windows
+            runner: windows-latest
+          - name: linux
+            runner: ubuntu-latest
+          - name: macos
+            runner: macos-latest
+      fail-fast: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Puppeteer Tests
+        id: test-run
+        uses: ./.github/actions/puppeteer-simple-test
+        with:
+          provider: "wopi"
+          project_name: "docsserver-daily"
+          suite: "daily"
+          launch_name: "Daily Tests"
+          os_name: ${{ matrix.os.name }}
+          read_pat: ${{ secrets.READ_PAT }}
+          report_key: ${{ secrets.REPORT_KEY }}
+
+      - name: Get Job ID
+        if: always()
+        id: job-id
+        shell: bash
+        run: |
+          JOB_NAME="WOPI - ${{ matrix.os.name }}"
+          JOB_ID=$(gh run view ${{ github.run_id }} --json jobs | jq -r --arg name "$JOB_NAME" '.jobs[] | select(.name == $name) | .databaseId')
+          echo "job-id=$JOB_ID" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Send message to Telegram
+        if: always()
+        uses: ./.github/actions/telegram-notify
+        with:
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_TO }}
+          os_name: ${{ matrix.os.name }}
+          provider: "wopi"
+          job_status: ${{ job.status }}
+          job_id: ${{ steps.job-id.outputs.job-id }}
+          rp_url: ${{ steps.test-run.outputs.rp_launch_url }}
+
+
+  test-example:
+    name: Example - ${{ matrix.os.name }}
+    needs: test-wopi
+    if: ${{ !cancelled() }}
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      matrix:
+        os:
+          - name: windows
+            runner: windows-latest
+          - name: linux
+            runner: ubuntu-latest
+          - name: macos
+            runner: macos-latest
+      fail-fast: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Puppeteer Tests
+        id: test-run
+        uses: ./.github/actions/puppeteer-simple-test
+        with:
+          provider: "example"
+          project_name: "docsserver-daily"
+          suite: "daily"
+          launch_name: "Daily Tests"
+          os_name: ${{ matrix.os.name }}
+          read_pat: ${{ secrets.READ_PAT }}
+          report_key: ${{ secrets.REPORT_KEY }}
+
+      - name: Get Job ID
+        if: always()
+        id: job-id
+        shell: bash
+        run: |
+          JOB_NAME="Example - ${{ matrix.os.name }}"
+          JOB_ID=$(gh run view ${{ github.run_id }} --json jobs | jq -r --arg name "$JOB_NAME" '.jobs[] | select(.name == $name) | .databaseId')
+          echo "job-id=$JOB_ID" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Send message to Telegram
+        if: always()
+        uses: ./.github/actions/telegram-notify
+        with:
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_TO }}
+          os_name: ${{ matrix.os.name }}
+          provider: "example"
+          job_status: ${{ job.status }}
+          job_id: ${{ steps.job-id.outputs.job-id }}
+          rp_url: ${{ steps.test-run.outputs.rp_launch_url }}
+
