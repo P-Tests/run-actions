@@ -1,0 +1,70 @@
+name: 'Puppeteer Prepare Test Matrix'
+description: 'Prepare test matrix for chunked Puppeteer tests'
+
+inputs:
+  provider:
+    description: 'Provider to test (e.g., example)'
+    required: true
+  chunk_size:
+    description: 'Number of tests per chunk'
+    required: false
+    default: '500'
+  read_pat:
+    description: 'GitHub PAT for private repository access'
+    required: true
+
+outputs:
+  matrix:
+    description: 'Test matrix for chunks'
+    value: ${{ steps.set-matrix.outputs.matrix }}
+  num_chunks:
+    description: 'Number of chunks'
+    value: ${{ steps.set-matrix.outputs.num_chunks }}
+  chunk_size:
+    description: 'Chunk size used'
+    value: ${{ steps.set-matrix.outputs.chunk_size }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout Dep.Tests repository
+      uses: actions/checkout@v4
+      with:
+        repository: ONLYOFFICE-data/Dep.Tests
+        path: Dep.Tests
+        token: ${{ inputs.read_pat }}
+        submodules: recursive
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 'latest'
+
+    - name: Install npm dependencies
+      shell: bash
+      working-directory: Dep.Tests/puppeteer/engine
+      run: npm ci --prefer-offline --no-audit
+
+    - name: Count tests and generate matrix
+      id: set-matrix
+      shell: bash
+      working-directory: Dep.Tests/puppeteer/engine
+      run: |
+        CHUNK_SIZE="${{ inputs.chunk_size }}"
+
+        OUTPUT=$(python run.py \
+          --providers ${{ inputs.provider }} \
+          --count-tests \
+          --chunk-size $CHUNK_SIZE)
+
+        NUM_CHUNKS=$(echo "$OUTPUT" | grep "num_chunks=" | cut -d'=' -f2)
+        MATRIX=$(echo "$OUTPUT" | grep "matrix=" | cut -d'=' -f2-)
+
+        echo "num_chunks=$NUM_CHUNKS" >> $GITHUB_OUTPUT
+        echo "chunk_size=$CHUNK_SIZE" >> $GITHUB_OUTPUT
+        echo "matrix=$MATRIX" >> $GITHUB_OUTPUT

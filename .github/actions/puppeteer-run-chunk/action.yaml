@@ -1,0 +1,190 @@
+name: 'Puppeteer Run Test Chunk'
+description: 'Run a specific chunk of Puppeteer tests'
+
+inputs:
+  provider:
+    description: 'Provider to test (e.g., example)'
+    required: true
+  chunk_id:
+    description: 'Chunk ID to run'
+    required: true
+  chunk_size:
+    description: 'Size of each chunk'
+    required: true
+
+  os_name:
+    description: 'Operating system name (windows, linux, macos)'
+    required: true
+  os_config:
+    description: 'OS-specific config file name'
+    required: true
+  url:
+    description: 'Test URL or environment name (release, hotfix, develop)'
+    required: true
+  url_release:
+    description: 'Release environment URL'
+    required: false
+    default: ''
+  url_hotfix:
+    description: 'Hotfix environment URL'
+    required: false
+    default: ''
+  url_develop:
+    description: 'Develop environment URL'
+    required: false
+    default: ''
+  project_name:
+    description: 'Report Portal project name'
+    required: true
+  read_pat:
+    description: 'GitHub PAT for private repository access'
+    required: true
+  report_key:
+    description: 'Report Portal API key'
+    required: true
+
+outputs:
+  uuid:
+    description: 'Launch UUID from test run'
+    value: ${{ steps.run-tests.outputs.uuid }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout Dep.Tests repository
+      uses: actions/checkout@v4
+      with:
+        repository: ONLYOFFICE-data/Dep.Tests
+        path: Dep.Tests
+        token: ${{ inputs.read_pat }}
+        submodules: recursive
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 'latest'
+
+    - name: Install npm dependencies
+      shell: bash
+      working-directory: Dep.Tests/puppeteer/engine
+      run: npm install
+
+    - name: Cache Puppeteer browsers
+      id: cache-puppeteer
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/puppeteer
+        key: ${{ runner.os }}-puppeteer-chrome-${{ hashFiles('Dep.Tests/puppeteer/engine/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-puppeteer-chrome-
+
+    - name: Install Chrome for Puppeteer
+      if: steps.cache-puppeteer.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        cd Dep.Tests/puppeteer/engine
+        npx puppeteer browsers install chrome
+
+    - name: Configure test URL
+      shell: bash
+      run: |
+        URL_INPUT="${{ inputs.url }}"
+
+        case "$URL_INPUT" in
+          release) URL="${{ inputs.url_release }}" ;;
+          hotfix) URL="${{ inputs.url_hotfix }}" ;;
+          develop) URL="${{ inputs.url_develop }}" ;;
+          *) URL="$URL_INPUT" ;;
+        esac
+
+        [[ "$URL" != */${{ inputs.provider }} ]] && URL="${URL%/}/${{ inputs.provider }}"
+
+        node -e "
+          const fs = require('fs');
+          const config = JSON.parse(fs.readFileSync('Dep.Tests/puppeteer/${{ inputs.os_config }}', 'utf8'));
+          config.testOptions.url = '$URL';
+          config.puppeteerOptions.headless = true;
+          fs.writeFileSync('Dep.Tests/puppeteer/${{ inputs.os_config }}', JSON.stringify(config, null, 2));
+        "
+
+    - name: Configure Report Portal
+      shell: bash
+      env:
+        REPORT_API_KEY: ${{ inputs.report_key }}
+      run: |
+        node -e "
+          const fs = require('fs');
+          const config = JSON.parse(fs.readFileSync('Dep.Tests/tools/report_portal/config.json', 'utf8'));
+          config.api_key = process.env.REPORT_API_KEY;
+          config.project_name = '${{ inputs.project_name }}';
+          config.launch_name = 'GitHub Actions - ${{ inputs.project_name }} - ${{ inputs.os_name }}';
+          fs.writeFileSync('Dep.Tests/tools/report_portal/config.json', JSON.stringify(config, null, 2));
+        "
+
+    - name: Configure Chrome sandbox (Linux only)
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        CHROME_DIR=$(find ~/.cache/puppeteer/chrome -name "linux-*" -type d 2>/dev/null | head -n 1)
+        if [ -n "$CHROME_DIR" ]; then
+          cd "$CHROME_DIR/chrome-linux64/"
+          sudo chown root:root chrome_sandbox
+          sudo chmod 4755 chrome_sandbox
+          sudo cp -p chrome_sandbox /usr/local/sbin/chrome-devel-sandbox
+          echo "CHROME_DEVEL_SANDBOX=/usr/local/sbin/chrome-devel-sandbox" >> $GITHUB_ENV
+        fi
+
+    - name: Run tests chunk ${{ inputs.chunk_id }}
+      id: run-tests
+      shell: bash
+      working-directory: Dep.Tests/puppeteer/engine
+      run: |
+        set +e
+        python run.py \
+          --providers ${{ inputs.provider }} \
+          --chunk-id ${{ inputs.chunk_id }} \
+          --chunk-size ${{ inputs.chunk_size }} \
+          --disable_animation \
+          --config_params puppeteerOptions.headless=true \
+          --connect_portal 2>&1 | tee output.log
+        EXIT_CODE=$?
+        set -e
+
+        UUID=""
+        if [ -f "output.log" ]; then
+          UUID=$(grep 'RP_LAUNCH_UUID=' output.log 2>/dev/null | sed 's/.*RP_LAUNCH_UUID=//g' | tr -d '[:space:]' | tail -n 1 || echo "")
+        fi
+
+        echo "uuid=$UUID" >> $GITHUB_OUTPUT
+
+        if [ -n "$UUID" ]; then
+          echo "$UUID" > launch_uuid.txt
+        else
+          touch launch_uuid.txt
+        fi
+
+        rm -f output.log
+
+        exit $EXIT_CODE
+
+    - name: Upload Launch UUID
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: launch-uuid-${{ inputs.os_name }}-chunk-${{ inputs.chunk_id }}
+        path: Dep.Tests/puppeteer/engine/launch_uuid.txt
+        retention-days: 1
+        if-no-files-found: warn
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: results-${{ inputs.os_name }}-chunk-${{ inputs.chunk_id }}
+        path: Dep.Tests/puppeteer/out
+        retention-days: 2

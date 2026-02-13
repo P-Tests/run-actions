@@ -13,7 +13,8 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run Puppeteer Tests
-        uses: ./.github/actions/puppeteer-test
+        id: test-run
+        uses: ./.github/actions/puppeteer-simple-test
         with:
           provider: "docspaceEU"
           suite: "hourly"
@@ -22,6 +23,11 @@ jobs:
           os_name: "windows"
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ secrets.REPORT_KEY }}
+
+      - name: Get Job ID
+        if: always()
+        id: job-id
+        uses: austenstone/job-id@v1
 
       - name: Send message to Telegram
         if: always()
@@ -32,6 +38,8 @@ jobs:
           os_name: 'windows'
           provider: 'docspaceEU'
           job_status: ${{ job.status }}
+          job_id: ${{ steps.job-id.outputs.job-id }}
+          rp_url: ${{ steps.test-run.outputs.rp_launch_url }}
 
   test-docspace-us:
     runs-on: windows-latest
@@ -40,7 +48,8 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run Puppeteer Tests
-        uses: ./.github/actions/puppeteer-test
+        id: test-run
+        uses: ./.github/actions/puppeteer-simple-test
         with:
           provider: "docspaceUS"
           suite: "hourly"
@@ -49,6 +58,11 @@ jobs:
           os_name: "windows"
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ secrets.REPORT_KEY }}
+
+      - name: Get Job ID
+        if: always()
+        id: job-id
+        uses: austenstone/job-id@v1
 
       - name: Send message to Telegram
         if: always()
@@ -59,3 +73,5 @@ jobs:
           os_name: 'windows'
           provider: 'docspaceUS'
           job_status: ${{ job.status }}
+          job_id: ${{ steps.job-id.outputs.job-id }}
+          rp_url: ${{ steps.test-run.outputs.rp_launch_url }}
