@@ -32,91 +32,605 @@ jobs:
         run: |
           OS="${{ inputs.os }}"
           if [ -z "$OS" ] || [ "$OS" == "all" ]; then
-            echo 'matrix={"os":[{"name":"windows","runner":"windows-latest"},{"name":"linux","runner":"ubuntu-latest"},{"name":"macos","runner":"macos-latest"}]}' >> $GITHUB_OUTPUT
+            echo 'matrix={"os":[{"name":"windows","runner":"windows-latest","config":"win"},{"name":"linux","runner":"ubuntu-latest","config":"linux"},{"name":"macos","runner":"macos-latest","config":"mac"}]}' >> $GITHUB_OUTPUT
           elif [ "$OS" == "windows" ]; then
-            echo 'matrix={"os":[{"name":"windows","runner":"windows-latest"}]}' >> $GITHUB_OUTPUT
+            echo 'matrix={"os":[{"name":"windows","runner":"windows-latest","config":"win"}]}' >> $GITHUB_OUTPUT
           elif [ "$OS" == "linux" ]; then
-            echo 'matrix={"os":[{"name":"linux","runner":"ubuntu-latest"}]}' >> $GITHUB_OUTPUT
+            echo 'matrix={"os":[{"name":"linux","runner":"ubuntu-latest","config":"linux"}]}' >> $GITHUB_OUTPUT
           elif [ "$OS" == "macos" ]; then
-            echo 'matrix={"os":[{"name":"macos","runner":"macos-latest"}]}' >> $GITHUB_OUTPUT
+            echo 'matrix={"os":[{"name":"macos","runner":"macos-latest","config":"mac"}]}' >> $GITHUB_OUTPUT
           fi
 
-  test-docspace-eu:
+  # ── docspaceEU ─────────────────────────────────────────────────────────────
+
+  prepare-docspaceEU:
+    name: Prepare - DocSpace EU
     needs: setup
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.prepare.outputs.matrix }}
+      num_chunks: ${{ steps.prepare.outputs.num_chunks }}
+      chunk_size: ${{ steps.prepare.outputs.chunk_size }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Prepare test matrix
+        id: prepare
+        uses: ./.github/actions/puppeteer-prepare
+        with:
+          provider: docspaceEU
+          suite: ${{ inputs.test_path == '' && 'hourly' || '' }}
+          chunk_size: '500'
+          read_pat: ${{ secrets.READ_PAT }}
+          test_path: ${{ inputs.test_path }}
+
+  run-docspaceEU:
+    name: DocSpace EU - ${{ matrix.os.name }} - Chunk ${{ matrix.chunk }}
+    needs: [setup, prepare-docspaceEU]
+    if: "!cancelled()"
     runs-on: ${{ matrix.os.runner }}
     strategy:
-      matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
+      matrix:
+        os: ${{ fromJson(needs.setup.outputs.matrix).os }}
+        chunk: ${{ fromJson(needs.prepare-docspaceEU.outputs.matrix).chunk }}
       fail-fast: false
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Run Puppeteer Tests
-        id: test-run
-        uses: ./.github/actions/puppeteer-simple-test
+      - name: Run tests
+        uses: ./.github/actions/puppeteer-run-chunk
         with:
-          provider: "docspaceEU"
-          suite: "hourly"
-          launch_name: "Hourly Tests - docspaceEU"
-          project_name: "docspace-saas"
+          provider: docspaceEU
+          suite: ${{ inputs.test_path == '' && 'hourly' || '' }}
+          chunk_id: ${{ matrix.chunk }}
+          chunk_size: ${{ needs.prepare-docspaceEU.outputs.chunk_size }}
           os_name: ${{ matrix.os.name }}
+          os_config: config_chrome_${{ matrix.os.config }}.json
+          project_name: docspace-saas
+          launch_name: Hourly Tests - docspaceEU
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ secrets.REPORT_KEY }}
           test_path: ${{ inputs.test_path }}
 
-      - name: Get Job ID
-        if: always()
-        id: job-id
-        uses: austenstone/job-id@v1
-
-      - name: Send message to Telegram
-        if: always()
-        uses: ./.github/actions/telegram-notify
+  collect-uuids-docspaceEU-windows:
+    name: Collect UUIDs - DocSpace EU - Windows
+    needs: [prepare-docspaceEU, run-docspaceEU]
+    runs-on: ubuntu-latest
+    if: "!cancelled() && needs.prepare-docspaceEU.outputs.num_chunks > 1 && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows')"
+    outputs:
+      launch_uuids: ${{ steps.collect.outputs.launch_uuids }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Collect UUIDs
+        id: collect
+        uses: ./.github/actions/collect-uuids
         with:
-          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
-          telegram_to: ${{ secrets.TELEGRAM_TO }}
-          os_name: ${{ matrix.os.name }}
-          provider: 'docspaceEU'
-          job_status: ${{ job.status }}
-          job_id: ${{ steps.job-id.outputs.job-id }}
-          rp_url: ${{ steps.test-run.outputs.rp_launch_url }}
+          os-name: windows
 
-  test-docspace-us:
+  merge-docspaceEU-windows:
+    name: Merge Launches - DocSpace EU - Windows
+    needs: [prepare-docspaceEU, collect-uuids-docspaceEU-windows]
+    runs-on: ubuntu-latest
+    if: "!cancelled() && needs.prepare-docspaceEU.outputs.num_chunks > 1 && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows')"
+    outputs:
+      rp_launch_url: ${{ steps.merge.outputs.rp_launch_url }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Merge Launches
+        id: merge
+        uses: ./.github/actions/merge-launches
+        with:
+          os-name: windows
+          launch-uuids: ${{ needs.collect-uuids-docspaceEU-windows.outputs.launch_uuids }}
+          api-key: ${{ secrets.REPORT_KEY }}
+          project-name: docspace-saas
+          github-token: ${{ secrets.READ_PAT }}
+
+  summary-docspaceEU-windows:
+    name: Summary - DocSpace EU - Windows
+    needs: [prepare-docspaceEU, run-docspaceEU, merge-docspaceEU-windows]
+    runs-on: ubuntu-latest
+    if: "!cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows')"
+    steps:
+      - name: Download URL artifact (single chunk)
+        if: needs.prepare-docspaceEU.outputs.num_chunks == '1'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: launch-url-windows-chunk-*
+          path: url-artifacts
+      - name: Get RP URL
+        id: get-rp-url
+        shell: bash
+        run: |
+          if [ "${{ needs.prepare-docspaceEU.outputs.num_chunks }}" == "1" ]; then
+            URL=$(cat url-artifacts/launch-url-windows-chunk-*/launch_url.txt 2>/dev/null | head -n 1 | tr -d '[:space:]' || echo "")
+            echo "rp_url=$URL" >> $GITHUB_OUTPUT
+          else
+            echo "rp_url=${{ needs.merge-docspaceEU-windows.outputs.rp_launch_url }}" >> $GITHUB_OUTPUT
+          fi
+      - name: Send Telegram notification
+        if: always()
+        shell: bash
+        run: |
+          JOBS_JSON=$(gh run view ${{ github.run_id }} --json jobs | jq '.jobs')
+          CHUNKS=$(echo "$JOBS_JSON" | jq -r '[.[] | select(.name | startswith("DocSpace EU - windows"))] | map({name: .name, conclusion: .conclusion, url: .url}) | @json')
+
+          FAILED=$(echo "$CHUNKS" | jq '[.[] | select(.conclusion == "failure")] | length')
+          SUCCESS=$(echo "$CHUNKS" | jq '[.[] | select(.conclusion == "success")] | length')
+          TOTAL=$(echo "$CHUNKS" | jq 'length')
+
+          if [[ "$FAILED" -gt 0 ]]; then STATUS="\u274C Failed (${SUCCESS}/${TOTAL})"; elif [[ "$SUCCESS" -eq "$TOTAL" ]] && [[ "$TOTAL" -gt 0 ]]; then STATUS="\u2705 Passed (${TOTAL}/${TOTAL})"; else STATUS="\u2753 Unknown"; fi
+
+          MESSAGE="\n*Workflow:* ${{ github.workflow }}\n*Provider:* docspaceEU\n*OS:* windows\n*Status:* ${STATUS}"
+          MESSAGE="${MESSAGE}\n[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          if [[ -n "${{ steps.get-rp-url.outputs.rp_url }}" ]]; then MESSAGE="${MESSAGE}\n[View Report Portal](${{ steps.get-rp-url.outputs.rp_url }})"; fi
+          MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')
+
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
+            -H "Content-Type: application/json" \
+            -d "{\"chat_id\":\"${{ secrets.TELEGRAM_TO }}\",\"text\":\"$MESSAGE\",\"parse_mode\":\"Markdown\",\"disable_notification\":true,\"disable_web_page_preview\":true}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.READ_PAT }}
+
+  collect-uuids-docspaceEU-linux:
+    name: Collect UUIDs - DocSpace EU - Linux
+    needs: [prepare-docspaceEU, run-docspaceEU]
+    runs-on: ubuntu-latest
+    if: "!cancelled() && needs.prepare-docspaceEU.outputs.num_chunks > 1 && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux')"
+    outputs:
+      launch_uuids: ${{ steps.collect.outputs.launch_uuids }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Collect UUIDs
+        id: collect
+        uses: ./.github/actions/collect-uuids
+        with:
+          os-name: linux
+
+  merge-docspaceEU-linux:
+    name: Merge Launches - DocSpace EU - Linux
+    needs: [prepare-docspaceEU, collect-uuids-docspaceEU-linux]
+    runs-on: ubuntu-latest
+    if: "!cancelled() && needs.prepare-docspaceEU.outputs.num_chunks > 1 && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux')"
+    outputs:
+      rp_launch_url: ${{ steps.merge.outputs.rp_launch_url }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Merge Launches
+        id: merge
+        uses: ./.github/actions/merge-launches
+        with:
+          os-name: linux
+          launch-uuids: ${{ needs.collect-uuids-docspaceEU-linux.outputs.launch_uuids }}
+          api-key: ${{ secrets.REPORT_KEY }}
+          project-name: docspace-saas
+          github-token: ${{ secrets.READ_PAT }}
+
+  summary-docspaceEU-linux:
+    name: Summary - DocSpace EU - Linux
+    needs: [prepare-docspaceEU, run-docspaceEU, merge-docspaceEU-linux]
+    runs-on: ubuntu-latest
+    if: "!cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux')"
+    steps:
+      - name: Download URL artifact (single chunk)
+        if: needs.prepare-docspaceEU.outputs.num_chunks == '1'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: launch-url-linux-chunk-*
+          path: url-artifacts
+      - name: Get RP URL
+        id: get-rp-url
+        shell: bash
+        run: |
+          if [ "${{ needs.prepare-docspaceEU.outputs.num_chunks }}" == "1" ]; then
+            URL=$(cat url-artifacts/launch-url-linux-chunk-*/launch_url.txt 2>/dev/null | head -n 1 | tr -d '[:space:]' || echo "")
+            echo "rp_url=$URL" >> $GITHUB_OUTPUT
+          else
+            echo "rp_url=${{ needs.merge-docspaceEU-linux.outputs.rp_launch_url }}" >> $GITHUB_OUTPUT
+          fi
+      - name: Send Telegram notification
+        if: always()
+        shell: bash
+        run: |
+          JOBS_JSON=$(gh run view ${{ github.run_id }} --json jobs | jq '.jobs')
+          CHUNKS=$(echo "$JOBS_JSON" | jq -r '[.[] | select(.name | startswith("DocSpace EU - linux"))] | map({name: .name, conclusion: .conclusion, url: .url}) | @json')
+
+          FAILED=$(echo "$CHUNKS" | jq '[.[] | select(.conclusion == "failure")] | length')
+          SUCCESS=$(echo "$CHUNKS" | jq '[.[] | select(.conclusion == "success")] | length')
+          TOTAL=$(echo "$CHUNKS" | jq 'length')
+
+          if [[ "$FAILED" -gt 0 ]]; then STATUS="\u274C Failed (${SUCCESS}/${TOTAL})"; elif [[ "$SUCCESS" -eq "$TOTAL" ]] && [[ "$TOTAL" -gt 0 ]]; then STATUS="\u2705 Passed (${TOTAL}/${TOTAL})"; else STATUS="\u2753 Unknown"; fi
+
+          MESSAGE="\n*Workflow:* ${{ github.workflow }}\n*Provider:* docspaceEU\n*OS:* linux\n*Status:* ${STATUS}"
+          MESSAGE="${MESSAGE}\n[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          if [[ -n "${{ steps.get-rp-url.outputs.rp_url }}" ]]; then MESSAGE="${MESSAGE}\n[View Report Portal](${{ steps.get-rp-url.outputs.rp_url }})"; fi
+          MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')
+
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
+            -H "Content-Type: application/json" \
+            -d "{\"chat_id\":\"${{ secrets.TELEGRAM_TO }}\",\"text\":\"$MESSAGE\",\"parse_mode\":\"Markdown\",\"disable_notification\":true,\"disable_web_page_preview\":true}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.READ_PAT }}
+
+  collect-uuids-docspaceEU-macos:
+    name: Collect UUIDs - DocSpace EU - macOS
+    needs: [prepare-docspaceEU, run-docspaceEU]
+    runs-on: ubuntu-latest
+    if: "!cancelled() && needs.prepare-docspaceEU.outputs.num_chunks > 1 && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos')"
+    outputs:
+      launch_uuids: ${{ steps.collect.outputs.launch_uuids }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Collect UUIDs
+        id: collect
+        uses: ./.github/actions/collect-uuids
+        with:
+          os-name: macos
+
+  merge-docspaceEU-macos:
+    name: Merge Launches - DocSpace EU - macOS
+    needs: [prepare-docspaceEU, collect-uuids-docspaceEU-macos]
+    runs-on: ubuntu-latest
+    if: "!cancelled() && needs.prepare-docspaceEU.outputs.num_chunks > 1 && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos')"
+    outputs:
+      rp_launch_url: ${{ steps.merge.outputs.rp_launch_url }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Merge Launches
+        id: merge
+        uses: ./.github/actions/merge-launches
+        with:
+          os-name: macos
+          launch-uuids: ${{ needs.collect-uuids-docspaceEU-macos.outputs.launch_uuids }}
+          api-key: ${{ secrets.REPORT_KEY }}
+          project-name: docspace-saas
+          github-token: ${{ secrets.READ_PAT }}
+
+  summary-docspaceEU-macos:
+    name: Summary - DocSpace EU - macOS
+    needs: [prepare-docspaceEU, run-docspaceEU, merge-docspaceEU-macos]
+    runs-on: ubuntu-latest
+    if: "!cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos')"
+    steps:
+      - name: Download URL artifact (single chunk)
+        if: needs.prepare-docspaceEU.outputs.num_chunks == '1'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: launch-url-macos-chunk-*
+          path: url-artifacts
+      - name: Get RP URL
+        id: get-rp-url
+        shell: bash
+        run: |
+          if [ "${{ needs.prepare-docspaceEU.outputs.num_chunks }}" == "1" ]; then
+            URL=$(cat url-artifacts/launch-url-macos-chunk-*/launch_url.txt 2>/dev/null | head -n 1 | tr -d '[:space:]' || echo "")
+            echo "rp_url=$URL" >> $GITHUB_OUTPUT
+          else
+            echo "rp_url=${{ needs.merge-docspaceEU-macos.outputs.rp_launch_url }}" >> $GITHUB_OUTPUT
+          fi
+      - name: Send Telegram notification
+        if: always()
+        shell: bash
+        run: |
+          JOBS_JSON=$(gh run view ${{ github.run_id }} --json jobs | jq '.jobs')
+          CHUNKS=$(echo "$JOBS_JSON" | jq -r '[.[] | select(.name | startswith("DocSpace EU - macos"))] | map({name: .name, conclusion: .conclusion, url: .url}) | @json')
+
+          FAILED=$(echo "$CHUNKS" | jq '[.[] | select(.conclusion == "failure")] | length')
+          SUCCESS=$(echo "$CHUNKS" | jq '[.[] | select(.conclusion == "success")] | length')
+          TOTAL=$(echo "$CHUNKS" | jq 'length')
+
+          if [[ "$FAILED" -gt 0 ]]; then STATUS="\u274C Failed (${SUCCESS}/${TOTAL})"; elif [[ "$SUCCESS" -eq "$TOTAL" ]] && [[ "$TOTAL" -gt 0 ]]; then STATUS="\u2705 Passed (${TOTAL}/${TOTAL})"; else STATUS="\u2753 Unknown"; fi
+
+          MESSAGE="\n*Workflow:* ${{ github.workflow }}\n*Provider:* docspaceEU\n*OS:* macos\n*Status:* ${STATUS}"
+          MESSAGE="${MESSAGE}\n[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          if [[ -n "${{ steps.get-rp-url.outputs.rp_url }}" ]]; then MESSAGE="${MESSAGE}\n[View Report Portal](${{ steps.get-rp-url.outputs.rp_url }})"; fi
+          MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')
+
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
+            -H "Content-Type: application/json" \
+            -d "{\"chat_id\":\"${{ secrets.TELEGRAM_TO }}\",\"text\":\"$MESSAGE\",\"parse_mode\":\"Markdown\",\"disable_notification\":true,\"disable_web_page_preview\":true}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.READ_PAT }}
+
+  # ── docspaceUS ─────────────────────────────────────────────────────────────
+
+  prepare-docspaceUS:
+    name: Prepare - DocSpace US
     needs: setup
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.prepare.outputs.matrix }}
+      num_chunks: ${{ steps.prepare.outputs.num_chunks }}
+      chunk_size: ${{ steps.prepare.outputs.chunk_size }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Prepare test matrix
+        id: prepare
+        uses: ./.github/actions/puppeteer-prepare
+        with:
+          provider: docspaceUS
+          suite: ${{ inputs.test_path == '' && 'hourly' || '' }}
+          chunk_size: '500'
+          read_pat: ${{ secrets.READ_PAT }}
+          test_path: ${{ inputs.test_path }}
+
+  run-docspaceUS:
+    name: DocSpace US - ${{ matrix.os.name }} - Chunk ${{ matrix.chunk }}
+    needs: [setup, prepare-docspaceUS]
+    if: "!cancelled()"
     runs-on: ${{ matrix.os.runner }}
     strategy:
-      matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
+      matrix:
+        os: ${{ fromJson(needs.setup.outputs.matrix).os }}
+        chunk: ${{ fromJson(needs.prepare-docspaceUS.outputs.matrix).chunk }}
       fail-fast: false
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Run Puppeteer Tests
-        id: test-run
-        uses: ./.github/actions/puppeteer-simple-test
+      - name: Run tests
+        uses: ./.github/actions/puppeteer-run-chunk
         with:
-          provider: "docspaceUS"
-          suite: "hourly"
-          launch_name: "Hourly Tests - docspaceUS"
-          project_name: "docspace-saas"
+          provider: docspaceUS
+          suite: ${{ inputs.test_path == '' && 'hourly' || '' }}
+          chunk_id: ${{ matrix.chunk }}
+          chunk_size: ${{ needs.prepare-docspaceUS.outputs.chunk_size }}
           os_name: ${{ matrix.os.name }}
+          os_config: config_chrome_${{ matrix.os.config }}.json
+          project_name: docspace-saas
+          launch_name: Hourly Tests - docspaceUS
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ secrets.REPORT_KEY }}
           test_path: ${{ inputs.test_path }}
 
-      - name: Get Job ID
-        if: always()
-        id: job-id
-        uses: austenstone/job-id@v1
-
-      - name: Send message to Telegram
-        if: always()
-        uses: ./.github/actions/telegram-notify
+  collect-uuids-docspaceUS-windows:
+    name: Collect UUIDs - DocSpace US - Windows
+    needs: [prepare-docspaceUS, run-docspaceUS]
+    runs-on: ubuntu-latest
+    if: "!cancelled() && needs.prepare-docspaceUS.outputs.num_chunks > 1 && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows')"
+    outputs:
+      launch_uuids: ${{ steps.collect.outputs.launch_uuids }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Collect UUIDs
+        id: collect
+        uses: ./.github/actions/collect-uuids
         with:
-          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
-          telegram_to: ${{ secrets.TELEGRAM_TO }}
-          os_name: ${{ matrix.os.name }}
-          provider: 'docspaceUS'
-          job_status: ${{ job.status }}
-          job_id: ${{ steps.job-id.outputs.job-id }}
-          rp_url: ${{ steps.test-run.outputs.rp_launch_url }}
+          os-name: windows
+
+  merge-docspaceUS-windows:
+    name: Merge Launches - DocSpace US - Windows
+    needs: [prepare-docspaceUS, collect-uuids-docspaceUS-windows]
+    runs-on: ubuntu-latest
+    if: "!cancelled() && needs.prepare-docspaceUS.outputs.num_chunks > 1 && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows')"
+    outputs:
+      rp_launch_url: ${{ steps.merge.outputs.rp_launch_url }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Merge Launches
+        id: merge
+        uses: ./.github/actions/merge-launches
+        with:
+          os-name: windows
+          launch-uuids: ${{ needs.collect-uuids-docspaceUS-windows.outputs.launch_uuids }}
+          api-key: ${{ secrets.REPORT_KEY }}
+          project-name: docspace-saas
+          github-token: ${{ secrets.READ_PAT }}
+
+  summary-docspaceUS-windows:
+    name: Summary - DocSpace US - Windows
+    needs: [prepare-docspaceUS, run-docspaceUS, merge-docspaceUS-windows]
+    runs-on: ubuntu-latest
+    if: "!cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows')"
+    steps:
+      - name: Download URL artifact (single chunk)
+        if: needs.prepare-docspaceUS.outputs.num_chunks == '1'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: launch-url-windows-chunk-*
+          path: url-artifacts
+      - name: Get RP URL
+        id: get-rp-url
+        shell: bash
+        run: |
+          if [ "${{ needs.prepare-docspaceUS.outputs.num_chunks }}" == "1" ]; then
+            URL=$(cat url-artifacts/launch-url-windows-chunk-*/launch_url.txt 2>/dev/null | head -n 1 | tr -d '[:space:]' || echo "")
+            echo "rp_url=$URL" >> $GITHUB_OUTPUT
+          else
+            echo "rp_url=${{ needs.merge-docspaceUS-windows.outputs.rp_launch_url }}" >> $GITHUB_OUTPUT
+          fi
+      - name: Send Telegram notification
+        if: always()
+        shell: bash
+        run: |
+          JOBS_JSON=$(gh run view ${{ github.run_id }} --json jobs | jq '.jobs')
+          CHUNKS=$(echo "$JOBS_JSON" | jq -r '[.[] | select(.name | startswith("DocSpace US - windows"))] | map({name: .name, conclusion: .conclusion, url: .url}) | @json')
+
+          FAILED=$(echo "$CHUNKS" | jq '[.[] | select(.conclusion == "failure")] | length')
+          SUCCESS=$(echo "$CHUNKS" | jq '[.[] | select(.conclusion == "success")] | length')
+          TOTAL=$(echo "$CHUNKS" | jq 'length')
+
+          if [[ "$FAILED" -gt 0 ]]; then STATUS="\u274C Failed (${SUCCESS}/${TOTAL})"; elif [[ "$SUCCESS" -eq "$TOTAL" ]] && [[ "$TOTAL" -gt 0 ]]; then STATUS="\u2705 Passed (${TOTAL}/${TOTAL})"; else STATUS="\u2753 Unknown"; fi
+
+          MESSAGE="\n*Workflow:* ${{ github.workflow }}\n*Provider:* docspaceUS\n*OS:* windows\n*Status:* ${STATUS}"
+          MESSAGE="${MESSAGE}\n[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          if [[ -n "${{ steps.get-rp-url.outputs.rp_url }}" ]]; then MESSAGE="${MESSAGE}\n[View Report Portal](${{ steps.get-rp-url.outputs.rp_url }})"; fi
+          MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')
+
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
+            -H "Content-Type: application/json" \
+            -d "{\"chat_id\":\"${{ secrets.TELEGRAM_TO }}\",\"text\":\"$MESSAGE\",\"parse_mode\":\"Markdown\",\"disable_notification\":true,\"disable_web_page_preview\":true}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.READ_PAT }}
+
+  collect-uuids-docspaceUS-linux:
+    name: Collect UUIDs - DocSpace US - Linux
+    needs: [prepare-docspaceUS, run-docspaceUS]
+    runs-on: ubuntu-latest
+    if: "!cancelled() && needs.prepare-docspaceUS.outputs.num_chunks > 1 && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux')"
+    outputs:
+      launch_uuids: ${{ steps.collect.outputs.launch_uuids }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Collect UUIDs
+        id: collect
+        uses: ./.github/actions/collect-uuids
+        with:
+          os-name: linux
+
+  merge-docspaceUS-linux:
+    name: Merge Launches - DocSpace US - Linux
+    needs: [prepare-docspaceUS, collect-uuids-docspaceUS-linux]
+    runs-on: ubuntu-latest
+    if: "!cancelled() && needs.prepare-docspaceUS.outputs.num_chunks > 1 && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux')"
+    outputs:
+      rp_launch_url: ${{ steps.merge.outputs.rp_launch_url }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Merge Launches
+        id: merge
+        uses: ./.github/actions/merge-launches
+        with:
+          os-name: linux
+          launch-uuids: ${{ needs.collect-uuids-docspaceUS-linux.outputs.launch_uuids }}
+          api-key: ${{ secrets.REPORT_KEY }}
+          project-name: docspace-saas
+          github-token: ${{ secrets.READ_PAT }}
+
+  summary-docspaceUS-linux:
+    name: Summary - DocSpace US - Linux
+    needs: [prepare-docspaceUS, run-docspaceUS, merge-docspaceUS-linux]
+    runs-on: ubuntu-latest
+    if: "!cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux')"
+    steps:
+      - name: Download URL artifact (single chunk)
+        if: needs.prepare-docspaceUS.outputs.num_chunks == '1'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: launch-url-linux-chunk-*
+          path: url-artifacts
+      - name: Get RP URL
+        id: get-rp-url
+        shell: bash
+        run: |
+          if [ "${{ needs.prepare-docspaceUS.outputs.num_chunks }}" == "1" ]; then
+            URL=$(cat url-artifacts/launch-url-linux-chunk-*/launch_url.txt 2>/dev/null | head -n 1 | tr -d '[:space:]' || echo "")
+            echo "rp_url=$URL" >> $GITHUB_OUTPUT
+          else
+            echo "rp_url=${{ needs.merge-docspaceUS-linux.outputs.rp_launch_url }}" >> $GITHUB_OUTPUT
+          fi
+      - name: Send Telegram notification
+        if: always()
+        shell: bash
+        run: |
+          JOBS_JSON=$(gh run view ${{ github.run_id }} --json jobs | jq '.jobs')
+          CHUNKS=$(echo "$JOBS_JSON" | jq -r '[.[] | select(.name | startswith("DocSpace US - linux"))] | map({name: .name, conclusion: .conclusion, url: .url}) | @json')
+
+          FAILED=$(echo "$CHUNKS" | jq '[.[] | select(.conclusion == "failure")] | length')
+          SUCCESS=$(echo "$CHUNKS" | jq '[.[] | select(.conclusion == "success")] | length')
+          TOTAL=$(echo "$CHUNKS" | jq 'length')
+
+          if [[ "$FAILED" -gt 0 ]]; then STATUS="\u274C Failed (${SUCCESS}/${TOTAL})"; elif [[ "$SUCCESS" -eq "$TOTAL" ]] && [[ "$TOTAL" -gt 0 ]]; then STATUS="\u2705 Passed (${TOTAL}/${TOTAL})"; else STATUS="\u2753 Unknown"; fi
+
+          MESSAGE="\n*Workflow:* ${{ github.workflow }}\n*Provider:* docspaceUS\n*OS:* linux\n*Status:* ${STATUS}"
+          MESSAGE="${MESSAGE}\n[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          if [[ -n "${{ steps.get-rp-url.outputs.rp_url }}" ]]; then MESSAGE="${MESSAGE}\n[View Report Portal](${{ steps.get-rp-url.outputs.rp_url }})"; fi
+          MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')
+
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
+            -H "Content-Type: application/json" \
+            -d "{\"chat_id\":\"${{ secrets.TELEGRAM_TO }}\",\"text\":\"$MESSAGE\",\"parse_mode\":\"Markdown\",\"disable_notification\":true,\"disable_web_page_preview\":true}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.READ_PAT }}
+
+  collect-uuids-docspaceUS-macos:
+    name: Collect UUIDs - DocSpace US - macOS
+    needs: [prepare-docspaceUS, run-docspaceUS]
+    runs-on: ubuntu-latest
+    if: "!cancelled() && needs.prepare-docspaceUS.outputs.num_chunks > 1 && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos')"
+    outputs:
+      launch_uuids: ${{ steps.collect.outputs.launch_uuids }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Collect UUIDs
+        id: collect
+        uses: ./.github/actions/collect-uuids
+        with:
+          os-name: macos
+
+  merge-docspaceUS-macos:
+    name: Merge Launches - DocSpace US - macOS
+    needs: [prepare-docspaceUS, collect-uuids-docspaceUS-macos]
+    runs-on: ubuntu-latest
+    if: "!cancelled() && needs.prepare-docspaceUS.outputs.num_chunks > 1 && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos')"
+    outputs:
+      rp_launch_url: ${{ steps.merge.outputs.rp_launch_url }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Merge Launches
+        id: merge
+        uses: ./.github/actions/merge-launches
+        with:
+          os-name: macos
+          launch-uuids: ${{ needs.collect-uuids-docspaceUS-macos.outputs.launch_uuids }}
+          api-key: ${{ secrets.REPORT_KEY }}
+          project-name: docspace-saas
+          github-token: ${{ secrets.READ_PAT }}
+
+  summary-docspaceUS-macos:
+    name: Summary - DocSpace US - macOS
+    needs: [prepare-docspaceUS, run-docspaceUS, merge-docspaceUS-macos]
+    runs-on: ubuntu-latest
+    if: "!cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos')"
+    steps:
+      - name: Download URL artifact (single chunk)
+        if: needs.prepare-docspaceUS.outputs.num_chunks == '1'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: launch-url-macos-chunk-*
+          path: url-artifacts
+      - name: Get RP URL
+        id: get-rp-url
+        shell: bash
+        run: |
+          if [ "${{ needs.prepare-docspaceUS.outputs.num_chunks }}" == "1" ]; then
+            URL=$(cat url-artifacts/launch-url-macos-chunk-*/launch_url.txt 2>/dev/null | head -n 1 | tr -d '[:space:]' || echo "")
+            echo "rp_url=$URL" >> $GITHUB_OUTPUT
+          else
+            echo "rp_url=${{ needs.merge-docspaceUS-macos.outputs.rp_launch_url }}" >> $GITHUB_OUTPUT
+          fi
+      - name: Send Telegram notification
+        if: always()
+        shell: bash
+        run: |
+          JOBS_JSON=$(gh run view ${{ github.run_id }} --json jobs | jq '.jobs')
+          CHUNKS=$(echo "$JOBS_JSON" | jq -r '[.[] | select(.name | startswith("DocSpace US - macos"))] | map({name: .name, conclusion: .conclusion, url: .url}) | @json')
+
+          FAILED=$(echo "$CHUNKS" | jq '[.[] | select(.conclusion == "failure")] | length')
+          SUCCESS=$(echo "$CHUNKS" | jq '[.[] | select(.conclusion == "success")] | length')
+          TOTAL=$(echo "$CHUNKS" | jq 'length')
+
+          if [[ "$FAILED" -gt 0 ]]; then STATUS="\u274C Failed (${SUCCESS}/${TOTAL})"; elif [[ "$SUCCESS" -eq "$TOTAL" ]] && [[ "$TOTAL" -gt 0 ]]; then STATUS="\u2705 Passed (${TOTAL}/${TOTAL})"; else STATUS="\u2753 Unknown"; fi
+
+          MESSAGE="\n*Workflow:* ${{ github.workflow }}\n*Provider:* docspaceUS\n*OS:* macos\n*Status:* ${STATUS}"
+          MESSAGE="${MESSAGE}\n[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          if [[ -n "${{ steps.get-rp-url.outputs.rp_url }}" ]]; then MESSAGE="${MESSAGE}\n[View Report Portal](${{ steps.get-rp-url.outputs.rp_url }})"; fi
+          MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')
+
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
+            -H "Content-Type: application/json" \
+            -d "{\"chat_id\":\"${{ secrets.TELEGRAM_TO }}\",\"text\":\"$MESSAGE\",\"parse_mode\":\"Markdown\",\"disable_notification\":true,\"disable_web_page_preview\":true}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.READ_PAT }}
