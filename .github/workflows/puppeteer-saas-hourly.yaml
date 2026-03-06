@@ -20,6 +20,11 @@ on:
         required: false
         default: ''
         type: string
+      chunk_size:
+        description: 'Number of tests per chunk'
+        required: false
+        default: '100'
+        type: string
 
 jobs:
   setup:
@@ -60,7 +65,7 @@ jobs:
         with:
           provider: docspaceEU
           suite: ${{ inputs.test_path == '' && 'hourly' || '' }}
-          chunk_size: '500'
+          chunk_size: ${{ inputs.chunk_size }}
           read_pat: ${{ secrets.READ_PAT }}
           test_path: ${{ inputs.test_path }}
 
@@ -182,7 +187,7 @@ jobs:
         with:
           provider: docspaceUS
           suite: ${{ inputs.test_path == '' && 'hourly' || '' }}
-          chunk_size: '500'
+          chunk_size: ${{ inputs.chunk_size }}
           read_pat: ${{ secrets.READ_PAT }}
           test_path: ${{ inputs.test_path }}
 
