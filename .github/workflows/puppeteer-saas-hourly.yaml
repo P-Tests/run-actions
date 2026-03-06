@@ -148,17 +148,51 @@ jobs:
             echo "rp_url=${{ steps.merge.outputs.rp_launch_url }}" >> $GITHUB_OUTPUT
           fi
 
-      - name: Send Telegram notification
+      - name: Collect chunk jobs info
+        id: collect-chunks
         if: always()
         shell: bash
         run: |
           JOBS_JSON=$(gh run view ${{ github.run_id }} --json jobs | jq '.jobs')
-          CHUNKS=$(echo "$JOBS_JSON" | jq -r '[.[] | select(.name | startswith("DocSpace EU - ${{ matrix.os.name }}"))] | map({name: .name, conclusion: .conclusion, url: .url}) | @json')
-          FAILED=$(echo "$CHUNKS" | jq '[.[] | select(.conclusion == "failure")] | length')
-          SUCCESS=$(echo "$CHUNKS" | jq '[.[] | select(.conclusion == "success")] | length')
-          TOTAL=$(echo "$CHUNKS" | jq 'length')
-          if [[ "$FAILED" -gt 0 ]]; then STATUS="\u274C Failed (${SUCCESS}/${TOTAL})"; elif [[ "$SUCCESS" -eq "$TOTAL" ]] && [[ "$TOTAL" -gt 0 ]]; then STATUS="\u2705 Passed (${TOTAL}/${TOTAL})"; else STATUS="\u2753 Unknown"; fi
-          MESSAGE="\n*Workflow:* ${{ github.workflow }}\n*Provider:* docspaceEU\n*OS:* ${{ matrix.os.name }}\n*Status:* ${STATUS}"
+          CHUNKS=$(echo "$JOBS_JSON" | jq -r '[.[] | select(.name | startswith("DocSpace EU - ${{ matrix.os.name }}"))] | map({name: .name, status: .status, conclusion: .conclusion, id: .databaseId, url: .url}) | @json')
+          echo "chunks=$CHUNKS" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.READ_PAT }}
+
+      - name: Send Telegram notification
+        if: always()
+        shell: bash
+        run: |
+          format_chunks() {
+            local chunks_json="$1"
+            if [[ "$chunks_json" == "[]" || -z "$chunks_json" ]]; then
+              echo "  No chunks found"
+              return
+            fi
+            echo "$chunks_json" | jq -r 'sort_by(.name) | .[] |
+              if .conclusion == "success" then "  \u2705 "
+              elif .conclusion == "failure" then "  \u274C "
+              elif .conclusion == "cancelled" then "  \u26D4 "
+              else "  \u2753 " end +
+              "[" + .name + "](" + .url + ")"'
+          }
+          CHUNKS_OUTPUT=$(format_chunks '${{ steps.collect-chunks.outputs.chunks }}')
+          FAILED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "failure")] | length')
+          CANCELLED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "cancelled")] | length')
+          SUCCESS_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "success")] | length')
+          TOTAL_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq 'length')
+          if [[ "$FAILED_COUNT" -gt 0 ]]; then
+            OVERALL_STATUS="\u274C Chunks failed (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
+          elif [[ "$CANCELLED_COUNT" -gt 0 ]]; then
+            OVERALL_STATUS="\u26D4 Some chunks cancelled (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
+          elif [[ "$SUCCESS_COUNT" -eq "$TOTAL_COUNT" ]] && [[ "$TOTAL_COUNT" -gt 0 ]]; then
+            OVERALL_STATUS="\u2705 All chunks passed (${TOTAL_COUNT}/${TOTAL_COUNT})"
+          else
+            OVERALL_STATUS="\u2753 Chunks status unknown"
+          fi
+          MESSAGE="\n*Workflow:* ${{ github.workflow }}\n*Provider:* docspaceEU\n*OS:* ${{ matrix.os.name }}\n*Status:* ${OVERALL_STATUS}"
+          MESSAGE="${MESSAGE}\n*Chunk Jobs:*"
+          MESSAGE="${MESSAGE}\n${CHUNKS_OUTPUT}"
           MESSAGE="${MESSAGE}\n[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
           if [[ -n "${{ steps.get-rp-url.outputs.rp_url }}" ]]; then MESSAGE="${MESSAGE}\n[View Report Portal](${{ steps.get-rp-url.outputs.rp_url }})"; fi
           MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')
@@ -270,17 +304,51 @@ jobs:
             echo "rp_url=${{ steps.merge.outputs.rp_launch_url }}" >> $GITHUB_OUTPUT
           fi
 
-      - name: Send Telegram notification
+      - name: Collect chunk jobs info
+        id: collect-chunks
         if: always()
         shell: bash
         run: |
           JOBS_JSON=$(gh run view ${{ github.run_id }} --json jobs | jq '.jobs')
-          CHUNKS=$(echo "$JOBS_JSON" | jq -r '[.[] | select(.name | startswith("DocSpace US - ${{ matrix.os.name }}"))] | map({name: .name, conclusion: .conclusion, url: .url}) | @json')
-          FAILED=$(echo "$CHUNKS" | jq '[.[] | select(.conclusion == "failure")] | length')
-          SUCCESS=$(echo "$CHUNKS" | jq '[.[] | select(.conclusion == "success")] | length')
-          TOTAL=$(echo "$CHUNKS" | jq 'length')
-          if [[ "$FAILED" -gt 0 ]]; then STATUS="\u274C Failed (${SUCCESS}/${TOTAL})"; elif [[ "$SUCCESS" -eq "$TOTAL" ]] && [[ "$TOTAL" -gt 0 ]]; then STATUS="\u2705 Passed (${TOTAL}/${TOTAL})"; else STATUS="\u2753 Unknown"; fi
-          MESSAGE="\n*Workflow:* ${{ github.workflow }}\n*Provider:* docspaceUS\n*OS:* ${{ matrix.os.name }}\n*Status:* ${STATUS}"
+          CHUNKS=$(echo "$JOBS_JSON" | jq -r '[.[] | select(.name | startswith("DocSpace US - ${{ matrix.os.name }}"))] | map({name: .name, status: .status, conclusion: .conclusion, id: .databaseId, url: .url}) | @json')
+          echo "chunks=$CHUNKS" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.READ_PAT }}
+
+      - name: Send Telegram notification
+        if: always()
+        shell: bash
+        run: |
+          format_chunks() {
+            local chunks_json="$1"
+            if [[ "$chunks_json" == "[]" || -z "$chunks_json" ]]; then
+              echo "  No chunks found"
+              return
+            fi
+            echo "$chunks_json" | jq -r 'sort_by(.name) | .[] |
+              if .conclusion == "success" then "  \u2705 "
+              elif .conclusion == "failure" then "  \u274C "
+              elif .conclusion == "cancelled" then "  \u26D4 "
+              else "  \u2753 " end +
+              "[" + .name + "](" + .url + ")"'
+          }
+          CHUNKS_OUTPUT=$(format_chunks '${{ steps.collect-chunks.outputs.chunks }}')
+          FAILED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "failure")] | length')
+          CANCELLED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "cancelled")] | length')
+          SUCCESS_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "success")] | length')
+          TOTAL_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq 'length')
+          if [[ "$FAILED_COUNT" -gt 0 ]]; then
+            OVERALL_STATUS="\u274C Chunks failed (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
+          elif [[ "$CANCELLED_COUNT" -gt 0 ]]; then
+            OVERALL_STATUS="\u26D4 Some chunks cancelled (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
+          elif [[ "$SUCCESS_COUNT" -eq "$TOTAL_COUNT" ]] && [[ "$TOTAL_COUNT" -gt 0 ]]; then
+            OVERALL_STATUS="\u2705 All chunks passed (${TOTAL_COUNT}/${TOTAL_COUNT})"
+          else
+            OVERALL_STATUS="\u2753 Chunks status unknown"
+          fi
+          MESSAGE="\n*Workflow:* ${{ github.workflow }}\n*Provider:* docspaceUS\n*OS:* ${{ matrix.os.name }}\n*Status:* ${OVERALL_STATUS}"
+          MESSAGE="${MESSAGE}\n*Chunk Jobs:*"
+          MESSAGE="${MESSAGE}\n${CHUNKS_OUTPUT}"
           MESSAGE="${MESSAGE}\n[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
           if [[ -n "${{ steps.get-rp-url.outputs.rp_url }}" ]]; then MESSAGE="${MESSAGE}\n[View Report Portal](${{ steps.get-rp-url.outputs.rp_url }})"; fi
           MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')
