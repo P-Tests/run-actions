@@ -151,15 +151,15 @@ runs:
         set +e
         TEST_PATH_ARG=""
         if [ -n "${{ inputs.test_path }}" ]; then
-          TEST_PATH_ARG="--spec ${{ inputs.test_path }}"
+          TEST_PATH_ARG="${{ inputs.test_path }}"
         fi
-        python run.py \
+        python run.py $TEST_PATH_ARG \
           --providers ${{ inputs.provider }} \
           --chunk-id ${{ inputs.chunk_id }} \
           --chunk-size ${{ inputs.chunk_size }} \
           --disable_animation \
           --config_params puppeteerOptions.headless=true \
-          --connect_portal $TEST_PATH_ARG 2>&1 | tee output.log
+          --connect_portal 2>&1 | tee output.log
         EXIT_CODE=$?
         set -e
 

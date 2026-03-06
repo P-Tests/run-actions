@@ -31,7 +31,7 @@ on:
       chunk_size:
         description: 'Number of tests per chunk'
         required: false
-        default: '500'
+        default: '100'
         type: string
 
 concurrency:
