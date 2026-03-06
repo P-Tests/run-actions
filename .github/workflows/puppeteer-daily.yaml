@@ -87,7 +87,7 @@ jobs:
           os_name: ${{ matrix.os.name }}
           os_config: config_chrome_${{ matrix.os.config }}.json
           project_name: docsserver-daily
-          launch_name: Daily Tests - docspaceEU
+          launch_name: Daily Tests
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ secrets.REPORT_KEY }}
           test_path: ${{ inputs.test_path }}
@@ -326,14 +326,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.READ_PAT }}
 
-  done-docspaceEU:
-    name: Done - DocSpace EU
-    needs: [summary-docspaceEU-windows, summary-docspaceEU-linux, summary-docspaceEU-macos]
-    runs-on: ubuntu-latest
-    if: always()
-    steps:
-      - run: echo "docspaceEU done"
-
   # ── docspaceUS ─────────────────────────────────────────────────────────────
 
   prepare-docspaceUS:
@@ -380,7 +372,7 @@ jobs:
           os_name: ${{ matrix.os.name }}
           os_config: config_chrome_${{ matrix.os.config }}.json
           project_name: docsserver-daily
-          launch_name: Daily Tests - docspaceUS
+          launch_name: Daily Tests
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ secrets.REPORT_KEY }}
           test_path: ${{ inputs.test_path }}
@@ -619,20 +611,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.READ_PAT }}
 
-  done-docspaceUS:
-    name: Done - DocSpace US
-    needs: [summary-docspaceUS-windows, summary-docspaceUS-linux, summary-docspaceUS-macos]
-    runs-on: ubuntu-latest
-    if: always()
-    steps:
-      - run: echo "docspaceUS done"
-
-  # ── ncoc (after EU + US) ───────────────────────────────────────────────────
+  # ── ncoc ───────────────────────────────────────────────────────────────────
 
   prepare-ncoc:
     name: Prepare - NCOC
-    needs: [setup, done-docspaceEU, done-docspaceUS]
-    if: "!cancelled()"
+    needs: setup
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.prepare.outputs.matrix }}
@@ -674,7 +657,7 @@ jobs:
           os_name: ${{ matrix.os.name }}
           os_config: config_chrome_${{ matrix.os.config }}.json
           project_name: docsserver-daily
-          launch_name: Daily Tests - NCOC
+          launch_name: Daily Tests
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ secrets.REPORT_KEY }}
           test_path: ${{ inputs.test_path }}
@@ -913,20 +896,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.READ_PAT }}
 
-  done-ncoc:
-    name: Done - NCOC
-    needs: [summary-ncoc-windows, summary-ncoc-linux, summary-ncoc-macos]
-    runs-on: ubuntu-latest
-    if: always()
-    steps:
-      - run: echo "ncoc done"
-
-  # ── ocis (after ncoc) ──────────────────────────────────────────────────────
+  # ── ocis ───────────────────────────────────────────────────────────────────
 
   prepare-ocis:
     name: Prepare - OCIS
-    needs: [setup, done-ncoc]
-    if: "!cancelled()"
+    needs: setup
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.prepare.outputs.matrix }}
@@ -968,7 +942,7 @@ jobs:
           os_name: ${{ matrix.os.name }}
           os_config: config_chrome_${{ matrix.os.config }}.json
           project_name: docsserver-daily
-          launch_name: Daily Tests - OCIS
+          launch_name: Daily Tests
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ secrets.REPORT_KEY }}
           test_path: ${{ inputs.test_path }}
@@ -1207,20 +1181,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.READ_PAT }}
 
-  done-ocis:
-    name: Done - OCIS
-    needs: [summary-ocis-windows, summary-ocis-linux, summary-ocis-macos]
-    runs-on: ubuntu-latest
-    if: always()
-    steps:
-      - run: echo "ocis done"
-
-  # ── wopi (after ocis) ──────────────────────────────────────────────────────
+  # ── wopi ───────────────────────────────────────────────────────────────────
 
   prepare-wopi:
     name: Prepare - WOPI
-    needs: [setup, done-ocis]
-    if: "!cancelled()"
+    needs: setup
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.prepare.outputs.matrix }}
@@ -1262,7 +1227,7 @@ jobs:
           os_name: ${{ matrix.os.name }}
           os_config: config_chrome_${{ matrix.os.config }}.json
           project_name: docsserver-daily
-          launch_name: Daily Tests - WOPI
+          launch_name: Daily Tests
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ secrets.REPORT_KEY }}
           test_path: ${{ inputs.test_path }}
@@ -1501,20 +1466,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.READ_PAT }}
 
-  done-wopi:
-    name: Done - WOPI
-    needs: [summary-wopi-windows, summary-wopi-linux, summary-wopi-macos]
-    runs-on: ubuntu-latest
-    if: always()
-    steps:
-      - run: echo "wopi done"
-
-  # ── example (after wopi) ───────────────────────────────────────────────────
+  # ── example ────────────────────────────────────────────────────────────────
 
   prepare-example:
     name: Prepare - Example
-    needs: [setup, done-wopi]
-    if: "!cancelled()"
+    needs: setup
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.prepare.outputs.matrix }}
@@ -1556,7 +1512,7 @@ jobs:
           os_name: ${{ matrix.os.name }}
           os_config: config_chrome_${{ matrix.os.config }}.json
           project_name: docsserver-daily
-          launch_name: Daily Tests - Example
+          launch_name: Daily Tests
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ secrets.REPORT_KEY }}
           test_path: ${{ inputs.test_path }}

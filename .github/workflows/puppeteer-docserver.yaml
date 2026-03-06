@@ -90,6 +90,7 @@ jobs:
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ secrets.REPORT_KEY }}
           test_path: ${{ inputs.test_path }}
+          launch_name: "${{ inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests' }}${{ needs.prepare.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '' }}"
 
   collect-uuids-windows:
     name: Collect Windows UUIDs
@@ -130,6 +131,7 @@ jobs:
           api-key: ${{ secrets.REPORT_KEY }}
           project-name: docsserver
           github-token: ${{ secrets.READ_PAT }}
+          launch-name: ${{ inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests' }}
 
   run-tests-linux:
     name: Linux - Chunk ${{ matrix.chunk }}
@@ -161,6 +163,7 @@ jobs:
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ secrets.REPORT_KEY }}
           test_path: ${{ inputs.test_path }}
+          launch_name: "${{ inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests' }}${{ needs.prepare.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '' }}"
 
   collect-uuids-linux:
     name: Collect Linux UUIDs
@@ -201,6 +204,7 @@ jobs:
           api-key: ${{ secrets.REPORT_KEY }}
           project-name: docsserver
           github-token: ${{ secrets.READ_PAT }}
+          launch-name: ${{ inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests' }}
 
   run-tests-macos:
     name: macOS - Chunk ${{ matrix.chunk }}
@@ -232,6 +236,7 @@ jobs:
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ secrets.REPORT_KEY }}
           test_path: ${{ inputs.test_path }}
+          launch_name: "${{ inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests' }}${{ needs.prepare.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '' }}"
 
   collect-uuids-macos:
     name: Collect macOS UUIDs
@@ -272,6 +277,7 @@ jobs:
           api-key: ${{ secrets.REPORT_KEY }}
           project-name: docsserver
           github-token: ${{ secrets.READ_PAT }}
+          launch-name: ${{ inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests' }}
 
   final-summary-windows:
     name: Windows Test Summary
