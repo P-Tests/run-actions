@@ -111,6 +111,7 @@ jobs:
         uses: ./.github/actions/collect-uuids
         with:
           os-name: ${{ matrix.os.name }}
+          provider: docspaceEU
 
       - name: Merge Launches
         id: merge
@@ -128,7 +129,7 @@ jobs:
         if: needs.prepare-docspaceEU.outputs.num_chunks == '1'
         uses: actions/download-artifact@v4
         with:
-          pattern: launch-url-${{ matrix.os.name }}-chunk-*
+          pattern: launch-url-docspaceEU-${{ matrix.os.name }}-chunk-*
           path: url-artifacts
 
       - name: Get RP URL
@@ -136,7 +137,7 @@ jobs:
         shell: bash
         run: |
           if [ "${{ needs.prepare-docspaceEU.outputs.num_chunks }}" == "1" ]; then
-            URL=$(cat url-artifacts/launch-url-${{ matrix.os.name }}-chunk-*/launch_url.txt 2>/dev/null | head -n 1 | tr -d '[:space:]' || echo "")
+            URL=$(cat url-artifacts/launch-url-docspaceEU-${{ matrix.os.name }}-chunk-*/launch_url.txt 2>/dev/null | head -n 1 | tr -d '[:space:]' || echo "")
             echo "rp_url=$URL" >> $GITHUB_OUTPUT
           else
             echo "rp_url=${{ steps.merge.outputs.rp_launch_url }}" >> $GITHUB_OUTPUT
@@ -232,6 +233,7 @@ jobs:
         uses: ./.github/actions/collect-uuids
         with:
           os-name: ${{ matrix.os.name }}
+          provider: docspaceUS
 
       - name: Merge Launches
         id: merge
@@ -249,7 +251,7 @@ jobs:
         if: needs.prepare-docspaceUS.outputs.num_chunks == '1'
         uses: actions/download-artifact@v4
         with:
-          pattern: launch-url-${{ matrix.os.name }}-chunk-*
+          pattern: launch-url-docspaceUS-${{ matrix.os.name }}-chunk-*
           path: url-artifacts
 
       - name: Get RP URL
@@ -257,7 +259,7 @@ jobs:
         shell: bash
         run: |
           if [ "${{ needs.prepare-docspaceUS.outputs.num_chunks }}" == "1" ]; then
-            URL=$(cat url-artifacts/launch-url-${{ matrix.os.name }}-chunk-*/launch_url.txt 2>/dev/null | head -n 1 | tr -d '[:space:]' || echo "")
+            URL=$(cat url-artifacts/launch-url-docspaceUS-${{ matrix.os.name }}-chunk-*/launch_url.txt 2>/dev/null | head -n 1 | tr -d '[:space:]' || echo "")
             echo "rp_url=$URL" >> $GITHUB_OUTPUT
           else
             echo "rp_url=${{ steps.merge.outputs.rp_launch_url }}" >> $GITHUB_OUTPUT
@@ -353,6 +355,7 @@ jobs:
         uses: ./.github/actions/collect-uuids
         with:
           os-name: ${{ matrix.os.name }}
+          provider: ncoc
 
       - name: Merge Launches
         id: merge
@@ -370,7 +373,7 @@ jobs:
         if: needs.prepare-ncoc.outputs.num_chunks == '1'
         uses: actions/download-artifact@v4
         with:
-          pattern: launch-url-${{ matrix.os.name }}-chunk-*
+          pattern: launch-url-ncoc-${{ matrix.os.name }}-chunk-*
           path: url-artifacts
 
       - name: Get RP URL
@@ -378,7 +381,7 @@ jobs:
         shell: bash
         run: |
           if [ "${{ needs.prepare-ncoc.outputs.num_chunks }}" == "1" ]; then
-            URL=$(cat url-artifacts/launch-url-${{ matrix.os.name }}-chunk-*/launch_url.txt 2>/dev/null | head -n 1 | tr -d '[:space:]' || echo "")
+            URL=$(cat url-artifacts/launch-url-ncoc-${{ matrix.os.name }}-chunk-*/launch_url.txt 2>/dev/null | head -n 1 | tr -d '[:space:]' || echo "")
             echo "rp_url=$URL" >> $GITHUB_OUTPUT
           else
             echo "rp_url=${{ steps.merge.outputs.rp_launch_url }}" >> $GITHUB_OUTPUT
@@ -474,6 +477,7 @@ jobs:
         uses: ./.github/actions/collect-uuids
         with:
           os-name: ${{ matrix.os.name }}
+          provider: ocis
 
       - name: Merge Launches
         id: merge
@@ -491,7 +495,7 @@ jobs:
         if: needs.prepare-ocis.outputs.num_chunks == '1'
         uses: actions/download-artifact@v4
         with:
-          pattern: launch-url-${{ matrix.os.name }}-chunk-*
+          pattern: launch-url-ocis-${{ matrix.os.name }}-chunk-*
           path: url-artifacts
 
       - name: Get RP URL
@@ -499,7 +503,7 @@ jobs:
         shell: bash
         run: |
           if [ "${{ needs.prepare-ocis.outputs.num_chunks }}" == "1" ]; then
-            URL=$(cat url-artifacts/launch-url-${{ matrix.os.name }}-chunk-*/launch_url.txt 2>/dev/null | head -n 1 | tr -d '[:space:]' || echo "")
+            URL=$(cat url-artifacts/launch-url-ocis-${{ matrix.os.name }}-chunk-*/launch_url.txt 2>/dev/null | head -n 1 | tr -d '[:space:]' || echo "")
             echo "rp_url=$URL" >> $GITHUB_OUTPUT
           else
             echo "rp_url=${{ steps.merge.outputs.rp_launch_url }}" >> $GITHUB_OUTPUT

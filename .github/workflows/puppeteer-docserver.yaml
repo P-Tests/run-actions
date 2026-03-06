@@ -109,6 +109,7 @@ jobs:
         uses: ./.github/actions/collect-uuids
         with:
           os-name: windows
+          provider: example
 
   merge-launches-windows:
     name: Merge Windows Launches
@@ -182,6 +183,7 @@ jobs:
         uses: ./.github/actions/collect-uuids
         with:
           os-name: linux
+          provider: example
 
   merge-launches-linux:
     name: Merge Linux Launches
@@ -255,6 +257,7 @@ jobs:
         uses: ./.github/actions/collect-uuids
         with:
           os-name: macos
+          provider: example
 
   merge-launches-macos:
     name: Merge macOS Launches
@@ -293,7 +296,7 @@ jobs:
         if: needs.prepare.outputs.num_chunks == '1'
         uses: actions/download-artifact@v4
         with:
-          pattern: launch-url-windows-chunk-*
+          pattern: launch-url-example-windows-chunk-*
           path: url-artifacts
 
       - name: Get RP URL
@@ -301,7 +304,7 @@ jobs:
         shell: bash
         run: |
           if [ "${{ needs.prepare.outputs.num_chunks }}" == "1" ]; then
-            URL=$(cat url-artifacts/launch-url-windows-chunk-*/launch_url.txt 2>/dev/null | head -n 1 | tr -d '[:space:]' || echo "")
+            URL=$(cat url-artifacts/launch-url-example-windows-chunk-*/launch_url.txt 2>/dev/null | head -n 1 | tr -d '[:space:]' || echo "")
             echo "rp_url=$URL" >> $GITHUB_OUTPUT
           else
             echo "rp_url=${{ needs.merge-launches-windows.outputs.rp_launch_url }}" >> $GITHUB_OUTPUT
@@ -403,7 +406,7 @@ jobs:
         if: needs.prepare.outputs.num_chunks == '1'
         uses: actions/download-artifact@v4
         with:
-          pattern: launch-url-linux-chunk-*
+          pattern: launch-url-example-linux-chunk-*
           path: url-artifacts
 
       - name: Get RP URL
@@ -411,7 +414,7 @@ jobs:
         shell: bash
         run: |
           if [ "${{ needs.prepare.outputs.num_chunks }}" == "1" ]; then
-            URL=$(cat url-artifacts/launch-url-linux-chunk-*/launch_url.txt 2>/dev/null | head -n 1 | tr -d '[:space:]' || echo "")
+            URL=$(cat url-artifacts/launch-url-example-linux-chunk-*/launch_url.txt 2>/dev/null | head -n 1 | tr -d '[:space:]' || echo "")
             echo "rp_url=$URL" >> $GITHUB_OUTPUT
           else
             echo "rp_url=${{ needs.merge-launches-linux.outputs.rp_launch_url }}" >> $GITHUB_OUTPUT
@@ -513,7 +516,7 @@ jobs:
         if: needs.prepare.outputs.num_chunks == '1'
         uses: actions/download-artifact@v4
         with:
-          pattern: launch-url-macos-chunk-*
+          pattern: launch-url-example-macos-chunk-*
           path: url-artifacts
 
       - name: Get RP URL
@@ -521,7 +524,7 @@ jobs:
         shell: bash
         run: |
           if [ "${{ needs.prepare.outputs.num_chunks }}" == "1" ]; then
-            URL=$(cat url-artifacts/launch-url-macos-chunk-*/launch_url.txt 2>/dev/null | head -n 1 | tr -d '[:space:]' || echo "")
+            URL=$(cat url-artifacts/launch-url-example-macos-chunk-*/launch_url.txt 2>/dev/null | head -n 1 | tr -d '[:space:]' || echo "")
             echo "rp_url=$URL" >> $GITHUB_OUTPUT
           else
             echo "rp_url=${{ needs.merge-launches-macos.outputs.rp_launch_url }}" >> $GITHUB_OUTPUT

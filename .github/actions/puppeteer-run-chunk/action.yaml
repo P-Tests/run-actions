@@ -213,7 +213,7 @@ runs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: launch-uuid-${{ inputs.os_name }}-chunk-${{ inputs.chunk_id }}
+        name: launch-uuid-${{ inputs.provider }}-${{ inputs.os_name }}-chunk-${{ inputs.chunk_id }}
         path: Dep.Tests/puppeteer/engine/launch_uuid.txt
         retention-days: 1
         if-no-files-found: warn
@@ -222,7 +222,7 @@ runs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: launch-url-${{ inputs.os_name }}-chunk-${{ inputs.chunk_id }}
+        name: launch-url-${{ inputs.provider }}-${{ inputs.os_name }}-chunk-${{ inputs.chunk_id }}
         path: Dep.Tests/puppeteer/engine/launch_url.txt
         retention-days: 1
         if-no-files-found: warn
@@ -231,6 +231,6 @@ runs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: results-${{ inputs.os_name }}-chunk-${{ inputs.chunk_id }}
+        name: results-${{ inputs.provider }}-${{ inputs.os_name }}-chunk-${{ inputs.chunk_id }}
         path: Dep.Tests/puppeteer/out
         retention-days: 2
