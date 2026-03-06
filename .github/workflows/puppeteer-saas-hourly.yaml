@@ -16,7 +16,7 @@ on:
           - linux
           - macos
       test_path:
-        description: 'Path to specific test file (optional)'
+        description: 'Path to specific test file or dir (optional)'
         required: false
         default: ''
         type: string

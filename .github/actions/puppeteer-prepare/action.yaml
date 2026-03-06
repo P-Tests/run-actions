@@ -13,7 +13,7 @@ inputs:
     description: 'GitHub PAT for private repository access'
     required: true
   test_path:
-    description: 'Path to specific test file (optional, counts only matching tests if set)'
+    description: 'Path to specific test file or dir (optional, counts only matching tests if set)'
     required: false
     default: ''
   suite:

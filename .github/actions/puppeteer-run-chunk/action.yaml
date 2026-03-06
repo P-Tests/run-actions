@@ -51,7 +51,7 @@ inputs:
     description: 'Report Portal API key'
     required: true
   test_path:
-    description: 'Path to specific test file (optional, runs full suite if empty)'
+    description: 'Path to specific test file or dir (optional, runs full suite if empty)'
     required: false
     default: ''
 
