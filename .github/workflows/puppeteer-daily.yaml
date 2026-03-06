@@ -65,7 +65,7 @@ jobs:
         with:
           provider: docspaceEU
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
-          chunk_size: ${{ inputs.chunk_size }}
+          chunk_size: ${{ inputs.chunk_size || '100' }}
           read_pat: ${{ secrets.READ_PAT }}
           test_path: ${{ inputs.test_path }}
 
@@ -221,7 +221,7 @@ jobs:
         with:
           provider: docspaceUS
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
-          chunk_size: ${{ inputs.chunk_size }}
+          chunk_size: ${{ inputs.chunk_size || '100' }}
           read_pat: ${{ secrets.READ_PAT }}
           test_path: ${{ inputs.test_path }}
 
@@ -377,7 +377,7 @@ jobs:
         with:
           provider: ncoc
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
-          chunk_size: ${{ inputs.chunk_size }}
+          chunk_size: ${{ inputs.chunk_size || '100' }}
           read_pat: ${{ secrets.READ_PAT }}
           test_path: ${{ inputs.test_path }}
 
@@ -533,7 +533,7 @@ jobs:
         with:
           provider: ocis
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
-          chunk_size: ${{ inputs.chunk_size }}
+          chunk_size: ${{ inputs.chunk_size || '100' }}
           read_pat: ${{ secrets.READ_PAT }}
           test_path: ${{ inputs.test_path }}
 
