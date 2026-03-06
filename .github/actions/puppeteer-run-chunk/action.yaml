@@ -11,7 +11,10 @@ inputs:
   chunk_size:
     description: 'Size of each chunk'
     required: true
-
+  suite:
+    description: 'Test suite to run (optional)'
+    required: false
+    default: ''
   os_name:
     description: 'Operating system name (windows, linux, macos)'
     required: true
@@ -20,7 +23,8 @@ inputs:
     required: true
   url:
     description: 'Test URL or environment name (release, hotfix, develop)'
-    required: true
+    required: false
+    default: ''
   url_release:
     description: 'Release environment URL'
     required: false
@@ -36,17 +40,28 @@ inputs:
   project_name:
     description: 'Report Portal project name'
     required: true
+  launch_name:
+    description: 'Report Portal launch name (optional)'
+    required: false
+    default: ''
   read_pat:
     description: 'GitHub PAT for private repository access'
     required: true
   report_key:
     description: 'Report Portal API key'
     required: true
+  test_path:
+    description: 'Path to specific test file (optional, runs full suite if empty)'
+    required: false
+    default: ''
 
 outputs:
   uuid:
     description: 'Launch UUID from test run'
     value: ${{ steps.run-tests.outputs.uuid }}
+  rp_url:
+    description: 'ReportPortal launch URL'
+    value: ${{ steps.run-tests.outputs.rp_url }}
 
 runs:
   using: 'composite'
@@ -91,6 +106,7 @@ runs:
         npx puppeteer browsers install chrome
 
     - name: Configure test URL
+      if: inputs.url != ''
       shell: bash
       run: |
         URL_INPUT="${{ inputs.url }}"
@@ -117,12 +133,16 @@ runs:
       env:
         REPORT_API_KEY: ${{ inputs.report_key }}
       run: |
+        LAUNCH_NAME="${{ inputs.launch_name }}"
+        if [ -z "$LAUNCH_NAME" ]; then
+          LAUNCH_NAME="GitHub Actions - ${{ inputs.project_name }} - ${{ inputs.os_name }}"
+        fi
         node -e "
           const fs = require('fs');
           const config = JSON.parse(fs.readFileSync('Dep.Tests/tools/report_portal/config.json', 'utf8'));
           config.api_key = process.env.REPORT_API_KEY;
           config.project_name = '${{ inputs.project_name }}';
-          config.launch_name = 'GitHub Actions - ${{ inputs.project_name }} - ${{ inputs.os_name }}';
+          config.launch_name = '$LAUNCH_NAME';
           fs.writeFileSync('Dep.Tests/tools/report_portal/config.json', JSON.stringify(config, null, 2));
         "
 
@@ -145,27 +165,44 @@ runs:
       working-directory: Dep.Tests/puppeteer/engine
       run: |
         set +e
-        python run.py \
+        TEST_PATH_ARG=""
+        if [ -n "${{ inputs.test_path }}" ]; then
+          TEST_PATH_ARG="${{ inputs.test_path }}"
+        fi
+        SUITE_ARG=""
+        if [ -n "${{ inputs.suite }}" ]; then
+          SUITE_ARG="--suite ${{ inputs.suite }}"
+        fi
+        python run.py $TEST_PATH_ARG \
           --providers ${{ inputs.provider }} \
           --chunk-id ${{ inputs.chunk_id }} \
           --chunk-size ${{ inputs.chunk_size }} \
           --disable_animation \
           --config_params puppeteerOptions.headless=true \
-          --connect_portal 2>&1 | tee output.log
+          --connect_portal $SUITE_ARG 2>&1 | tee output.log
         EXIT_CODE=$?
         set -e
 
         UUID=""
+        RP_URL=""
         if [ -f "output.log" ]; then
           UUID=$(grep 'RP_LAUNCH_UUID=' output.log 2>/dev/null | sed 's/.*RP_LAUNCH_UUID=//g' | tr -d '[:space:]' | tail -n 1 || echo "")
+          RP_URL=$(grep 'RP_LAUNCH_URL=' output.log 2>/dev/null | sed 's/.*RP_LAUNCH_URL=//g' | tr -d '[:space:]' | tail -n 1 || echo "")
         fi
 
         echo "uuid=$UUID" >> $GITHUB_OUTPUT
+        echo "rp_url=$RP_URL" >> $GITHUB_OUTPUT
 
         if [ -n "$UUID" ]; then
           echo "$UUID" > launch_uuid.txt
         else
           touch launch_uuid.txt
+        fi
+
+        if [ -n "$RP_URL" ]; then
+          echo "$RP_URL" > launch_url.txt
+        else
+          touch launch_url.txt
         fi
 
         rm -f output.log
@@ -176,8 +213,17 @@ runs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: launch-uuid-${{ inputs.os_name }}-chunk-${{ inputs.chunk_id }}
+        name: launch-uuid-${{ inputs.provider }}-${{ inputs.os_name }}-chunk-${{ inputs.chunk_id }}
         path: Dep.Tests/puppeteer/engine/launch_uuid.txt
+        retention-days: 1
+        if-no-files-found: warn
+
+    - name: Upload Launch URL
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: launch-url-${{ inputs.provider }}-${{ inputs.os_name }}-chunk-${{ inputs.chunk_id }}
+        path: Dep.Tests/puppeteer/engine/launch_url.txt
         retention-days: 1
         if-no-files-found: warn
 
@@ -185,6 +231,6 @@ runs:
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: results-${{ inputs.os_name }}-chunk-${{ inputs.chunk_id }}
+        name: results-${{ inputs.provider }}-${{ inputs.os_name }}-chunk-${{ inputs.chunk_id }}
         path: Dep.Tests/puppeteer/out
         retention-days: 2

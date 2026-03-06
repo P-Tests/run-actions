@@ -5,6 +5,9 @@ inputs:
   os-name:
     description: 'Operating system name (windows, linux, macos)'
     required: true
+  provider:
+    description: 'Provider name (used to scope artifact search)'
+    required: true
 
 outputs:
   launch_uuids:
@@ -17,7 +20,7 @@ runs:
     - name: Download UUID artifacts
       uses: actions/download-artifact@v4
       with:
-        pattern: launch-uuid-${{ inputs.os-name }}-*
+        pattern: launch-uuid-${{ inputs.provider }}-${{ inputs.os-name }}-*
         path: uuids
 
     - name: Collect ${{ inputs.os-name }} UUIDs
@@ -26,7 +29,7 @@ runs:
       run: |
         UUIDS=""
 
-        for file in uuids/launch-uuid-${{ inputs.os-name }}-*/launch_uuid.txt; do
+        for file in uuids/launch-uuid-${{ inputs.provider }}-${{ inputs.os-name }}-*/launch_uuid.txt; do
           [ -f "$file" ] || continue
 
           UUID=$(tr -d '[:space:]' < "$file")

@@ -12,6 +12,14 @@ inputs:
   read_pat:
     description: 'GitHub PAT for private repository access'
     required: true
+  test_path:
+    description: 'Path to specific test file (optional, counts only matching tests if set)'
+    required: false
+    default: ''
+  suite:
+    description: 'Test suite to run (optional)'
+    required: false
+    default: ''
 
 outputs:
   matrix:
@@ -57,10 +65,19 @@ runs:
       run: |
         CHUNK_SIZE="${{ inputs.chunk_size }}"
 
-        OUTPUT=$(python run.py \
+        TEST_PATH_ARG=""
+        if [ -n "${{ inputs.test_path }}" ]; then
+          TEST_PATH_ARG="${{ inputs.test_path }}"
+        fi
+        SUITE_ARG=""
+        if [ -n "${{ inputs.suite }}" ]; then
+          SUITE_ARG="--suite ${{ inputs.suite }}"
+        fi
+
+        OUTPUT=$(python run.py $TEST_PATH_ARG \
           --providers ${{ inputs.provider }} \
           --count-tests \
-          --chunk-size $CHUNK_SIZE)
+          --chunk-size $CHUNK_SIZE $SUITE_ARG)
 
         NUM_CHUNKS=$(echo "$OUTPUT" | grep "num_chunks=" | cut -d'=' -f2)
         MATRIX=$(echo "$OUTPUT" | grep "matrix=" | cut -d'=' -f2-)

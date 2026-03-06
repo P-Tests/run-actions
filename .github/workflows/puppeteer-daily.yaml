@@ -4,336 +4,668 @@ on:
   schedule:
     - cron: "0 20 * * *"
   workflow_dispatch:
+    inputs:
+      os:
+        description: 'Operating system'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - windows
+          - linux
+          - macos
+      test_path:
+        description: 'Path to specific test file (optional)'
+        required: false
+        default: ''
+        type: string
+      chunk_size:
+        description: 'Number of tests per chunk'
+        required: false
+        default: '100'
+        type: string
 
 jobs:
-  test-docspaceEU:
-    name: DocSpace EU - ${{ matrix.os.name }}
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - id: set-matrix
+        shell: bash
+        run: |
+          OS="${{ inputs.os }}"
+          if [ -z "$OS" ] || [ "$OS" == "all" ]; then
+            echo 'matrix={"os":[{"name":"windows","runner":"windows-latest","config":"win"},{"name":"linux","runner":"ubuntu-latest","config":"linux"},{"name":"macos","runner":"macos-latest","config":"mac"}]}' >> $GITHUB_OUTPUT
+          elif [ "$OS" == "windows" ]; then
+            echo 'matrix={"os":[{"name":"windows","runner":"windows-latest","config":"win"}]}' >> $GITHUB_OUTPUT
+          elif [ "$OS" == "linux" ]; then
+            echo 'matrix={"os":[{"name":"linux","runner":"ubuntu-latest","config":"linux"}]}' >> $GITHUB_OUTPUT
+          elif [ "$OS" == "macos" ]; then
+            echo 'matrix={"os":[{"name":"macos","runner":"macos-latest","config":"mac"}]}' >> $GITHUB_OUTPUT
+          fi
+
+  # ── docspaceEU ─────────────────────────────────────────────────────────────
+
+  prepare-docspaceEU:
+    name: Prepare - DocSpace EU
+    needs: setup
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.prepare.outputs.matrix }}
+      num_chunks: ${{ steps.prepare.outputs.num_chunks }}
+      chunk_size: ${{ steps.prepare.outputs.chunk_size }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Prepare test matrix
+        id: prepare
+        uses: ./.github/actions/puppeteer-prepare
+        with:
+          provider: docspaceEU
+          suite: ${{ inputs.test_path == '' && 'daily' || '' }}
+          chunk_size: ${{ inputs.chunk_size }}
+          read_pat: ${{ secrets.READ_PAT }}
+          test_path: ${{ inputs.test_path }}
+
+  run-docspaceEU:
+    name: DocSpace EU - ${{ matrix.os.name }} - Chunk ${{ matrix.chunk }}
+    needs: [setup, prepare-docspaceEU]
+    if: "!cancelled()"
     runs-on: ${{ matrix.os.runner }}
     strategy:
       matrix:
-        os:
-          - name: windows
-            runner: windows-latest
-          - name: linux
-            runner: ubuntu-latest
-          - name: macos
-            runner: macos-latest
+        os: ${{ fromJson(needs.setup.outputs.matrix).os }}
+        chunk: ${{ fromJson(needs.prepare-docspaceEU.outputs.matrix).chunk }}
       fail-fast: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Run tests
+        uses: ./.github/actions/puppeteer-run-chunk
+        with:
+          provider: docspaceEU
+          suite: ${{ inputs.test_path == '' && 'daily' || '' }}
+          chunk_id: ${{ matrix.chunk }}
+          chunk_size: ${{ needs.prepare-docspaceEU.outputs.chunk_size }}
+          os_name: ${{ matrix.os.name }}
+          os_config: config_chrome_${{ matrix.os.config }}.json
+          project_name: docsserver-daily
+          launch_name: "Daily Tests${{ needs.prepare-docspaceEU.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '' }}"
+          read_pat: ${{ secrets.READ_PAT }}
+          report_key: ${{ secrets.REPORT_KEY }}
+          test_path: ${{ inputs.test_path }}
 
+  post-docspaceEU:
+    name: Post - DocSpace EU - ${{ matrix.os.name }}
+    needs: [setup, prepare-docspaceEU, run-docspaceEU]
+    if: "!cancelled()"
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: ${{ fromJson(needs.setup.outputs.matrix).os }}
+      fail-fast: false
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Run Puppeteer Tests
-        id: test-run
-        uses: ./.github/actions/puppeteer-simple-test
+      - name: Collect UUIDs
+        id: collect
+        if: needs.prepare-docspaceEU.outputs.num_chunks > 1
+        uses: ./.github/actions/collect-uuids
         with:
-          provider: "docspaceEU"
-          project_name: "docsserver-daily"
-          suite: "daily"
-          launch_name: "Daily Tests"
-          os_name: ${{ matrix.os.name }}
-          read_pat: ${{ secrets.READ_PAT }}
-          report_key: ${{ secrets.REPORT_KEY }}
+          os-name: ${{ matrix.os.name }}
+          provider: docspaceEU
 
-      - name: Get Job ID
-        if: always()
-        id: job-id
+      - name: Merge Launches
+        id: merge
+        if: needs.prepare-docspaceEU.outputs.num_chunks > 1
+        uses: ./.github/actions/merge-launches
+        with:
+          os-name: ${{ matrix.os.name }}
+          launch-uuids: ${{ steps.collect.outputs.launch_uuids }}
+          api-key: ${{ secrets.REPORT_KEY }}
+          project-name: docsserver-daily
+          github-token: ${{ secrets.READ_PAT }}
+          launch-name: Daily Tests
+
+      - name: Download URL artifact (single chunk)
+        if: needs.prepare-docspaceEU.outputs.num_chunks == '1'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: launch-url-docspaceEU-${{ matrix.os.name }}-chunk-*
+          path: url-artifacts
+
+      - name: Get RP URL
+        id: get-rp-url
         shell: bash
         run: |
-          JOB_NAME="DocSpace EU - ${{ matrix.os.name }}"
-          JOB_ID=$(gh run view ${{ github.run_id }} --json jobs | jq -r --arg name "$JOB_NAME" '.jobs[] | select(.name == $name) | .databaseId')
-          echo "job-id=$JOB_ID" >> $GITHUB_OUTPUT
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
+          if [ "${{ needs.prepare-docspaceEU.outputs.num_chunks }}" == "1" ]; then
+            URL=$(cat url-artifacts/launch-url-docspaceEU-${{ matrix.os.name }}-chunk-*/launch_url.txt 2>/dev/null | head -n 1 | tr -d '[:space:]' || echo "")
+            echo "rp_url=$URL" >> $GITHUB_OUTPUT
+          else
+            echo "rp_url=${{ steps.merge.outputs.rp_launch_url }}" >> $GITHUB_OUTPUT
+          fi
 
-      - name: Send message to Telegram
+      - name: Collect chunk jobs info
+        id: collect-chunks
         if: always()
-        uses: ./.github/actions/telegram-notify
+        shell: bash
+        run: |
+          JOBS_JSON=$(gh run view ${{ github.run_id }} --json jobs | jq '.jobs')
+          CHUNKS=$(echo "$JOBS_JSON" | jq -r '[.[] | select(.name | startswith("DocSpace EU - ${{ matrix.os.name }}"))] | map({name: .name, status: .status, conclusion: .conclusion, id: .databaseId, url: .url}) | @json')
+          echo "chunks=$CHUNKS" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.READ_PAT }}
+
+      - name: Send Telegram notification
+        if: always()
+        shell: bash
+        run: |
+          format_chunks() {
+            local chunks_json="$1"
+            if [[ "$chunks_json" == "[]" || -z "$chunks_json" ]]; then
+              echo "  No chunks found"
+              return
+            fi
+            echo "$chunks_json" | jq -r 'sort_by(.name) | .[] |
+              if .conclusion == "success" then "  \u2705 "
+              elif .conclusion == "failure" then "  \u274C "
+              elif .conclusion == "cancelled" then "  \u26D4 "
+              else "  \u2753 " end +
+              "[" + .name + "](" + .url + ")"'
+          }
+          CHUNKS_OUTPUT=$(format_chunks '${{ steps.collect-chunks.outputs.chunks }}')
+          FAILED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "failure")] | length')
+          CANCELLED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "cancelled")] | length')
+          SUCCESS_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "success")] | length')
+          TOTAL_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq 'length')
+          if [[ "$FAILED_COUNT" -gt 0 ]]; then
+            OVERALL_STATUS="\u274C Chunks failed (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
+          elif [[ "$CANCELLED_COUNT" -gt 0 ]]; then
+            OVERALL_STATUS="\u26D4 Some chunks cancelled (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
+          elif [[ "$SUCCESS_COUNT" -eq "$TOTAL_COUNT" ]] && [[ "$TOTAL_COUNT" -gt 0 ]]; then
+            OVERALL_STATUS="\u2705 All chunks passed (${TOTAL_COUNT}/${TOTAL_COUNT})"
+          else
+            OVERALL_STATUS="\u2753 Chunks status unknown"
+          fi
+          MESSAGE="\n*Workflow:* ${{ github.workflow }}\n*Provider:* docspaceEU\n*OS:* ${{ matrix.os.name }}\n*Status:* ${OVERALL_STATUS}"
+          MESSAGE="${MESSAGE}\n*Chunk Jobs:*"
+          MESSAGE="${MESSAGE}\n${CHUNKS_OUTPUT}"
+          MESSAGE="${MESSAGE}\n[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          if [[ -n "${{ steps.get-rp-url.outputs.rp_url }}" ]]; then MESSAGE="${MESSAGE}\n[View Report Portal](${{ steps.get-rp-url.outputs.rp_url }})"; fi
+          MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
+            -H "Content-Type: application/json" \
+            -d "{\"chat_id\":\"${{ secrets.TELEGRAM_TO }}\",\"text\":\"$MESSAGE\",\"parse_mode\":\"Markdown\",\"disable_notification\":true,\"disable_web_page_preview\":true}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.READ_PAT }}
+
+  # ── docspaceUS ─────────────────────────────────────────────────────────────
+
+  prepare-docspaceUS:
+    name: Prepare - DocSpace US
+    needs: setup
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.prepare.outputs.matrix }}
+      num_chunks: ${{ steps.prepare.outputs.num_chunks }}
+      chunk_size: ${{ steps.prepare.outputs.chunk_size }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Prepare test matrix
+        id: prepare
+        uses: ./.github/actions/puppeteer-prepare
         with:
-          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
-          telegram_to: ${{ secrets.TELEGRAM_TO }}
-          os_name: ${{ matrix.os.name }}
-          provider: "docspaceEU"
-          job_status: ${{ job.status }}
-          job_id: ${{ steps.job-id.outputs.job-id }}
-          rp_url: ${{ steps.test-run.outputs.rp_launch_url }}
+          provider: docspaceUS
+          suite: ${{ inputs.test_path == '' && 'daily' || '' }}
+          chunk_size: ${{ inputs.chunk_size }}
+          read_pat: ${{ secrets.READ_PAT }}
+          test_path: ${{ inputs.test_path }}
 
-
-  test-docspaceUS:
-    name: DocSpace US - ${{ matrix.os.name }}
+  run-docspaceUS:
+    name: DocSpace US - ${{ matrix.os.name }} - Chunk ${{ matrix.chunk }}
+    needs: [setup, prepare-docspaceUS]
+    if: "!cancelled()"
     runs-on: ${{ matrix.os.runner }}
     strategy:
       matrix:
-        os:
-          - name: windows
-            runner: windows-latest
-          - name: linux
-            runner: ubuntu-latest
-          - name: macos
-            runner: macos-latest
+        os: ${{ fromJson(needs.setup.outputs.matrix).os }}
+        chunk: ${{ fromJson(needs.prepare-docspaceUS.outputs.matrix).chunk }}
       fail-fast: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Run tests
+        uses: ./.github/actions/puppeteer-run-chunk
+        with:
+          provider: docspaceUS
+          suite: ${{ inputs.test_path == '' && 'daily' || '' }}
+          chunk_id: ${{ matrix.chunk }}
+          chunk_size: ${{ needs.prepare-docspaceUS.outputs.chunk_size }}
+          os_name: ${{ matrix.os.name }}
+          os_config: config_chrome_${{ matrix.os.config }}.json
+          project_name: docsserver-daily
+          launch_name: "Daily Tests${{ needs.prepare-docspaceUS.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '' }}"
+          read_pat: ${{ secrets.READ_PAT }}
+          report_key: ${{ secrets.REPORT_KEY }}
+          test_path: ${{ inputs.test_path }}
 
+  post-docspaceUS:
+    name: Post - DocSpace US - ${{ matrix.os.name }}
+    needs: [setup, prepare-docspaceUS, run-docspaceUS]
+    if: "!cancelled()"
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: ${{ fromJson(needs.setup.outputs.matrix).os }}
+      fail-fast: false
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Run Puppeteer Tests
-        id: test-run
-        uses: ./.github/actions/puppeteer-simple-test
+      - name: Collect UUIDs
+        id: collect
+        if: needs.prepare-docspaceUS.outputs.num_chunks > 1
+        uses: ./.github/actions/collect-uuids
         with:
-          provider: "docspaceUS"
-          project_name: "docsserver-daily"
-          suite: "daily"
-          launch_name: "Daily Tests"
-          os_name: ${{ matrix.os.name }}
-          read_pat: ${{ secrets.READ_PAT }}
-          report_key: ${{ secrets.REPORT_KEY }}
+          os-name: ${{ matrix.os.name }}
+          provider: docspaceUS
 
-      - name: Get Job ID
-        if: always()
-        id: job-id
+      - name: Merge Launches
+        id: merge
+        if: needs.prepare-docspaceUS.outputs.num_chunks > 1
+        uses: ./.github/actions/merge-launches
+        with:
+          os-name: ${{ matrix.os.name }}
+          launch-uuids: ${{ steps.collect.outputs.launch_uuids }}
+          api-key: ${{ secrets.REPORT_KEY }}
+          project-name: docsserver-daily
+          github-token: ${{ secrets.READ_PAT }}
+          launch-name: Daily Tests
+
+      - name: Download URL artifact (single chunk)
+        if: needs.prepare-docspaceUS.outputs.num_chunks == '1'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: launch-url-docspaceUS-${{ matrix.os.name }}-chunk-*
+          path: url-artifacts
+
+      - name: Get RP URL
+        id: get-rp-url
         shell: bash
         run: |
-          JOB_NAME="DocSpace US - ${{ matrix.os.name }}"
-          JOB_ID=$(gh run view ${{ github.run_id }} --json jobs | jq -r --arg name "$JOB_NAME" '.jobs[] | select(.name == $name) | .databaseId')
-          echo "job-id=$JOB_ID" >> $GITHUB_OUTPUT
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
+          if [ "${{ needs.prepare-docspaceUS.outputs.num_chunks }}" == "1" ]; then
+            URL=$(cat url-artifacts/launch-url-docspaceUS-${{ matrix.os.name }}-chunk-*/launch_url.txt 2>/dev/null | head -n 1 | tr -d '[:space:]' || echo "")
+            echo "rp_url=$URL" >> $GITHUB_OUTPUT
+          else
+            echo "rp_url=${{ steps.merge.outputs.rp_launch_url }}" >> $GITHUB_OUTPUT
+          fi
 
-      - name: Send message to Telegram
+      - name: Collect chunk jobs info
+        id: collect-chunks
         if: always()
-        uses: ./.github/actions/telegram-notify
+        shell: bash
+        run: |
+          JOBS_JSON=$(gh run view ${{ github.run_id }} --json jobs | jq '.jobs')
+          CHUNKS=$(echo "$JOBS_JSON" | jq -r '[.[] | select(.name | startswith("DocSpace US - ${{ matrix.os.name }}"))] | map({name: .name, status: .status, conclusion: .conclusion, id: .databaseId, url: .url}) | @json')
+          echo "chunks=$CHUNKS" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.READ_PAT }}
+
+      - name: Send Telegram notification
+        if: always()
+        shell: bash
+        run: |
+          format_chunks() {
+            local chunks_json="$1"
+            if [[ "$chunks_json" == "[]" || -z "$chunks_json" ]]; then
+              echo "  No chunks found"
+              return
+            fi
+            echo "$chunks_json" | jq -r 'sort_by(.name) | .[] |
+              if .conclusion == "success" then "  \u2705 "
+              elif .conclusion == "failure" then "  \u274C "
+              elif .conclusion == "cancelled" then "  \u26D4 "
+              else "  \u2753 " end +
+              "[" + .name + "](" + .url + ")"'
+          }
+          CHUNKS_OUTPUT=$(format_chunks '${{ steps.collect-chunks.outputs.chunks }}')
+          FAILED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "failure")] | length')
+          CANCELLED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "cancelled")] | length')
+          SUCCESS_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "success")] | length')
+          TOTAL_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq 'length')
+          if [[ "$FAILED_COUNT" -gt 0 ]]; then
+            OVERALL_STATUS="\u274C Chunks failed (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
+          elif [[ "$CANCELLED_COUNT" -gt 0 ]]; then
+            OVERALL_STATUS="\u26D4 Some chunks cancelled (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
+          elif [[ "$SUCCESS_COUNT" -eq "$TOTAL_COUNT" ]] && [[ "$TOTAL_COUNT" -gt 0 ]]; then
+            OVERALL_STATUS="\u2705 All chunks passed (${TOTAL_COUNT}/${TOTAL_COUNT})"
+          else
+            OVERALL_STATUS="\u2753 Chunks status unknown"
+          fi
+          MESSAGE="\n*Workflow:* ${{ github.workflow }}\n*Provider:* docspaceUS\n*OS:* ${{ matrix.os.name }}\n*Status:* ${OVERALL_STATUS}"
+          MESSAGE="${MESSAGE}\n*Chunk Jobs:*"
+          MESSAGE="${MESSAGE}\n${CHUNKS_OUTPUT}"
+          MESSAGE="${MESSAGE}\n[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          if [[ -n "${{ steps.get-rp-url.outputs.rp_url }}" ]]; then MESSAGE="${MESSAGE}\n[View Report Portal](${{ steps.get-rp-url.outputs.rp_url }})"; fi
+          MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
+            -H "Content-Type: application/json" \
+            -d "{\"chat_id\":\"${{ secrets.TELEGRAM_TO }}\",\"text\":\"$MESSAGE\",\"parse_mode\":\"Markdown\",\"disable_notification\":true,\"disable_web_page_preview\":true}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.READ_PAT }}
+
+  # ── ncoc ───────────────────────────────────────────────────────────────────
+
+  prepare-ncoc:
+    name: Prepare - NCOC
+    needs: setup
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.prepare.outputs.matrix }}
+      num_chunks: ${{ steps.prepare.outputs.num_chunks }}
+      chunk_size: ${{ steps.prepare.outputs.chunk_size }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Prepare test matrix
+        id: prepare
+        uses: ./.github/actions/puppeteer-prepare
         with:
-          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
-          telegram_to: ${{ secrets.TELEGRAM_TO }}
-          os_name: ${{ matrix.os.name }}
-          provider: "docspaceUS"
-          job_status: ${{ job.status }}
-          job_id: ${{ steps.job-id.outputs.job-id }}
-          rp_url: ${{ steps.test-run.outputs.rp_launch_url }}
+          provider: ncoc
+          suite: ${{ inputs.test_path == '' && 'daily' || '' }}
+          chunk_size: ${{ inputs.chunk_size }}
+          read_pat: ${{ secrets.READ_PAT }}
+          test_path: ${{ inputs.test_path }}
 
-
-  test-ncoc:
-    name: NCOC - ${{ matrix.os.name }}
-    needs: [test-docspaceEU, test-docspaceUS]
-    if: ${{ !cancelled() }}
+  run-ncoc:
+    name: NCOC - ${{ matrix.os.name }} - Chunk ${{ matrix.chunk }}
+    needs: [setup, prepare-ncoc]
+    if: "!cancelled()"
     runs-on: ${{ matrix.os.runner }}
     strategy:
       matrix:
-        os:
-          - name: windows
-            runner: windows-latest
-          - name: linux
-            runner: ubuntu-latest
-          - name: macos
-            runner: macos-latest
+        os: ${{ fromJson(needs.setup.outputs.matrix).os }}
+        chunk: ${{ fromJson(needs.prepare-ncoc.outputs.matrix).chunk }}
       fail-fast: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Run tests
+        uses: ./.github/actions/puppeteer-run-chunk
+        with:
+          provider: ncoc
+          suite: ${{ inputs.test_path == '' && 'daily' || '' }}
+          chunk_id: ${{ matrix.chunk }}
+          chunk_size: ${{ needs.prepare-ncoc.outputs.chunk_size }}
+          os_name: ${{ matrix.os.name }}
+          os_config: config_chrome_${{ matrix.os.config }}.json
+          project_name: docsserver-daily
+          launch_name: "Daily Tests${{ needs.prepare-ncoc.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '' }}"
+          read_pat: ${{ secrets.READ_PAT }}
+          report_key: ${{ secrets.REPORT_KEY }}
+          test_path: ${{ inputs.test_path }}
 
+  post-ncoc:
+    name: Post - NCOC - ${{ matrix.os.name }}
+    needs: [setup, prepare-ncoc, run-ncoc]
+    if: "!cancelled()"
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: ${{ fromJson(needs.setup.outputs.matrix).os }}
+      fail-fast: false
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Run Puppeteer Tests
-        id: test-run
-        uses: ./.github/actions/puppeteer-simple-test
+      - name: Collect UUIDs
+        id: collect
+        if: needs.prepare-ncoc.outputs.num_chunks > 1
+        uses: ./.github/actions/collect-uuids
         with:
-          provider: "ncoc"
-          project_name: "docsserver-daily"
-          suite: "daily"
-          launch_name: "Daily Tests"
-          os_name: ${{ matrix.os.name }}
-          read_pat: ${{ secrets.READ_PAT }}
-          report_key: ${{ secrets.REPORT_KEY }}
+          os-name: ${{ matrix.os.name }}
+          provider: ncoc
 
-      - name: Get Job ID
-        if: always()
-        id: job-id
+      - name: Merge Launches
+        id: merge
+        if: needs.prepare-ncoc.outputs.num_chunks > 1
+        uses: ./.github/actions/merge-launches
+        with:
+          os-name: ${{ matrix.os.name }}
+          launch-uuids: ${{ steps.collect.outputs.launch_uuids }}
+          api-key: ${{ secrets.REPORT_KEY }}
+          project-name: docsserver-daily
+          github-token: ${{ secrets.READ_PAT }}
+          launch-name: Daily Tests
+
+      - name: Download URL artifact (single chunk)
+        if: needs.prepare-ncoc.outputs.num_chunks == '1'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: launch-url-ncoc-${{ matrix.os.name }}-chunk-*
+          path: url-artifacts
+
+      - name: Get RP URL
+        id: get-rp-url
         shell: bash
         run: |
-          JOB_NAME="NCOC - ${{ matrix.os.name }}"
-          JOB_ID=$(gh run view ${{ github.run_id }} --json jobs | jq -r --arg name "$JOB_NAME" '.jobs[] | select(.name == $name) | .databaseId')
-          echo "job-id=$JOB_ID" >> $GITHUB_OUTPUT
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
+          if [ "${{ needs.prepare-ncoc.outputs.num_chunks }}" == "1" ]; then
+            URL=$(cat url-artifacts/launch-url-ncoc-${{ matrix.os.name }}-chunk-*/launch_url.txt 2>/dev/null | head -n 1 | tr -d '[:space:]' || echo "")
+            echo "rp_url=$URL" >> $GITHUB_OUTPUT
+          else
+            echo "rp_url=${{ steps.merge.outputs.rp_launch_url }}" >> $GITHUB_OUTPUT
+          fi
 
-      - name: Send message to Telegram
+      - name: Collect chunk jobs info
+        id: collect-chunks
         if: always()
-        uses: ./.github/actions/telegram-notify
+        shell: bash
+        run: |
+          JOBS_JSON=$(gh run view ${{ github.run_id }} --json jobs | jq '.jobs')
+          CHUNKS=$(echo "$JOBS_JSON" | jq -r '[.[] | select(.name | startswith("NCOC - ${{ matrix.os.name }}"))] | map({name: .name, status: .status, conclusion: .conclusion, id: .databaseId, url: .url}) | @json')
+          echo "chunks=$CHUNKS" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.READ_PAT }}
+
+      - name: Send Telegram notification
+        if: always()
+        shell: bash
+        run: |
+          format_chunks() {
+            local chunks_json="$1"
+            if [[ "$chunks_json" == "[]" || -z "$chunks_json" ]]; then
+              echo "  No chunks found"
+              return
+            fi
+            echo "$chunks_json" | jq -r 'sort_by(.name) | .[] |
+              if .conclusion == "success" then "  \u2705 "
+              elif .conclusion == "failure" then "  \u274C "
+              elif .conclusion == "cancelled" then "  \u26D4 "
+              else "  \u2753 " end +
+              "[" + .name + "](" + .url + ")"'
+          }
+          CHUNKS_OUTPUT=$(format_chunks '${{ steps.collect-chunks.outputs.chunks }}')
+          FAILED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "failure")] | length')
+          CANCELLED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "cancelled")] | length')
+          SUCCESS_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "success")] | length')
+          TOTAL_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq 'length')
+          if [[ "$FAILED_COUNT" -gt 0 ]]; then
+            OVERALL_STATUS="\u274C Chunks failed (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
+          elif [[ "$CANCELLED_COUNT" -gt 0 ]]; then
+            OVERALL_STATUS="\u26D4 Some chunks cancelled (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
+          elif [[ "$SUCCESS_COUNT" -eq "$TOTAL_COUNT" ]] && [[ "$TOTAL_COUNT" -gt 0 ]]; then
+            OVERALL_STATUS="\u2705 All chunks passed (${TOTAL_COUNT}/${TOTAL_COUNT})"
+          else
+            OVERALL_STATUS="\u2753 Chunks status unknown"
+          fi
+          MESSAGE="\n*Workflow:* ${{ github.workflow }}\n*Provider:* ncoc\n*OS:* ${{ matrix.os.name }}\n*Status:* ${OVERALL_STATUS}"
+          MESSAGE="${MESSAGE}\n*Chunk Jobs:*"
+          MESSAGE="${MESSAGE}\n${CHUNKS_OUTPUT}"
+          MESSAGE="${MESSAGE}\n[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          if [[ -n "${{ steps.get-rp-url.outputs.rp_url }}" ]]; then MESSAGE="${MESSAGE}\n[View Report Portal](${{ steps.get-rp-url.outputs.rp_url }})"; fi
+          MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
+            -H "Content-Type: application/json" \
+            -d "{\"chat_id\":\"${{ secrets.TELEGRAM_TO }}\",\"text\":\"$MESSAGE\",\"parse_mode\":\"Markdown\",\"disable_notification\":true,\"disable_web_page_preview\":true}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.READ_PAT }}
+
+  # ── ocis ───────────────────────────────────────────────────────────────────
+
+  prepare-ocis:
+    name: Prepare - OCIS
+    needs: setup
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.prepare.outputs.matrix }}
+      num_chunks: ${{ steps.prepare.outputs.num_chunks }}
+      chunk_size: ${{ steps.prepare.outputs.chunk_size }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Prepare test matrix
+        id: prepare
+        uses: ./.github/actions/puppeteer-prepare
         with:
-          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
-          telegram_to: ${{ secrets.TELEGRAM_TO }}
-          os_name: ${{ matrix.os.name }}
-          provider: "ncoc"
-          job_status: ${{ job.status }}
-          job_id: ${{ steps.job-id.outputs.job-id }}
-          rp_url: ${{ steps.test-run.outputs.rp_launch_url }}
+          provider: ocis
+          suite: ${{ inputs.test_path == '' && 'daily' || '' }}
+          chunk_size: ${{ inputs.chunk_size }}
+          read_pat: ${{ secrets.READ_PAT }}
+          test_path: ${{ inputs.test_path }}
 
-
-  test-ocis:
-    name: OCIS - ${{ matrix.os.name }}
-    needs: test-ncoc
-    if: ${{ !cancelled() }}
+  run-ocis:
+    name: OCIS - ${{ matrix.os.name }} - Chunk ${{ matrix.chunk }}
+    needs: [setup, prepare-ocis]
+    if: "!cancelled()"
     runs-on: ${{ matrix.os.runner }}
     strategy:
       matrix:
-        os:
-          - name: windows
-            runner: windows-latest
-          - name: linux
-            runner: ubuntu-latest
-          - name: macos
-            runner: macos-latest
+        os: ${{ fromJson(needs.setup.outputs.matrix).os }}
+        chunk: ${{ fromJson(needs.prepare-ocis.outputs.matrix).chunk }}
       fail-fast: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Run tests
+        uses: ./.github/actions/puppeteer-run-chunk
+        with:
+          provider: ocis
+          suite: ${{ inputs.test_path == '' && 'daily' || '' }}
+          chunk_id: ${{ matrix.chunk }}
+          chunk_size: ${{ needs.prepare-ocis.outputs.chunk_size }}
+          os_name: ${{ matrix.os.name }}
+          os_config: config_chrome_${{ matrix.os.config }}.json
+          project_name: docsserver-daily
+          launch_name: "Daily Tests${{ needs.prepare-ocis.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '' }}"
+          read_pat: ${{ secrets.READ_PAT }}
+          report_key: ${{ secrets.REPORT_KEY }}
+          test_path: ${{ inputs.test_path }}
 
+  post-ocis:
+    name: Post - OCIS - ${{ matrix.os.name }}
+    needs: [setup, prepare-ocis, run-ocis]
+    if: "!cancelled()"
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: ${{ fromJson(needs.setup.outputs.matrix).os }}
+      fail-fast: false
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Run Puppeteer Tests
-        id: test-run
-        uses: ./.github/actions/puppeteer-simple-test
+      - name: Collect UUIDs
+        id: collect
+        if: needs.prepare-ocis.outputs.num_chunks > 1
+        uses: ./.github/actions/collect-uuids
         with:
-          provider: "ocis"
-          project_name: "docsserver-daily"
-          suite: "daily"
-          launch_name: "Daily Tests"
-          os_name: ${{ matrix.os.name }}
-          read_pat: ${{ secrets.READ_PAT }}
-          report_key: ${{ secrets.REPORT_KEY }}
+          os-name: ${{ matrix.os.name }}
+          provider: ocis
 
-      - name: Get Job ID
-        if: always()
-        id: job-id
+      - name: Merge Launches
+        id: merge
+        if: needs.prepare-ocis.outputs.num_chunks > 1
+        uses: ./.github/actions/merge-launches
+        with:
+          os-name: ${{ matrix.os.name }}
+          launch-uuids: ${{ steps.collect.outputs.launch_uuids }}
+          api-key: ${{ secrets.REPORT_KEY }}
+          project-name: docsserver-daily
+          github-token: ${{ secrets.READ_PAT }}
+          launch-name: Daily Tests
+
+      - name: Download URL artifact (single chunk)
+        if: needs.prepare-ocis.outputs.num_chunks == '1'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: launch-url-ocis-${{ matrix.os.name }}-chunk-*
+          path: url-artifacts
+
+      - name: Get RP URL
+        id: get-rp-url
         shell: bash
         run: |
-          JOB_NAME="OCIS - ${{ matrix.os.name }}"
-          JOB_ID=$(gh run view ${{ github.run_id }} --json jobs | jq -r --arg name "$JOB_NAME" '.jobs[] | select(.name == $name) | .databaseId')
-          echo "job-id=$JOB_ID" >> $GITHUB_OUTPUT
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
+          if [ "${{ needs.prepare-ocis.outputs.num_chunks }}" == "1" ]; then
+            URL=$(cat url-artifacts/launch-url-ocis-${{ matrix.os.name }}-chunk-*/launch_url.txt 2>/dev/null | head -n 1 | tr -d '[:space:]' || echo "")
+            echo "rp_url=$URL" >> $GITHUB_OUTPUT
+          else
+            echo "rp_url=${{ steps.merge.outputs.rp_launch_url }}" >> $GITHUB_OUTPUT
+          fi
 
-      - name: Send message to Telegram
+      - name: Collect chunk jobs info
+        id: collect-chunks
         if: always()
-        uses: ./.github/actions/telegram-notify
-        with:
-          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
-          telegram_to: ${{ secrets.TELEGRAM_TO }}
-          os_name: ${{ matrix.os.name }}
-          provider: "ocis"
-          job_status: ${{ job.status }}
-          job_id: ${{ steps.job-id.outputs.job-id }}
-          rp_url: ${{ steps.test-run.outputs.rp_launch_url }}
-
-
-  test-wopi:
-    name: WOPI - ${{ matrix.os.name }}
-    needs: test-ocis
-    if: ${{ !cancelled() }}
-    runs-on: ${{ matrix.os.runner }}
-    strategy:
-      matrix:
-        os:
-          - name: windows
-            runner: windows-latest
-          - name: linux
-            runner: ubuntu-latest
-          - name: macos
-            runner: macos-latest
-      fail-fast: false
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Run Puppeteer Tests
-        id: test-run
-        uses: ./.github/actions/puppeteer-simple-test
-        with:
-          provider: "wopi"
-          project_name: "docsserver-daily"
-          suite: "daily"
-          launch_name: "Daily Tests"
-          os_name: ${{ matrix.os.name }}
-          read_pat: ${{ secrets.READ_PAT }}
-          report_key: ${{ secrets.REPORT_KEY }}
-
-      - name: Get Job ID
-        if: always()
-        id: job-id
         shell: bash
         run: |
-          JOB_NAME="WOPI - ${{ matrix.os.name }}"
-          JOB_ID=$(gh run view ${{ github.run_id }} --json jobs | jq -r --arg name "$JOB_NAME" '.jobs[] | select(.name == $name) | .databaseId')
-          echo "job-id=$JOB_ID" >> $GITHUB_OUTPUT
+          JOBS_JSON=$(gh run view ${{ github.run_id }} --json jobs | jq '.jobs')
+          CHUNKS=$(echo "$JOBS_JSON" | jq -r '[.[] | select(.name | startswith("OCIS - ${{ matrix.os.name }}"))] | map({name: .name, status: .status, conclusion: .conclusion, id: .databaseId, url: .url}) | @json')
+          echo "chunks=$CHUNKS" >> $GITHUB_OUTPUT
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.READ_PAT }}
 
-      - name: Send message to Telegram
+      - name: Send Telegram notification
         if: always()
-        uses: ./.github/actions/telegram-notify
-        with:
-          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
-          telegram_to: ${{ secrets.TELEGRAM_TO }}
-          os_name: ${{ matrix.os.name }}
-          provider: "wopi"
-          job_status: ${{ job.status }}
-          job_id: ${{ steps.job-id.outputs.job-id }}
-          rp_url: ${{ steps.test-run.outputs.rp_launch_url }}
-
-
-  test-example:
-    name: Example - ${{ matrix.os.name }}
-    needs: test-wopi
-    if: ${{ !cancelled() }}
-    runs-on: ${{ matrix.os.runner }}
-    strategy:
-      matrix:
-        os:
-          - name: windows
-            runner: windows-latest
-          - name: linux
-            runner: ubuntu-latest
-          - name: macos
-            runner: macos-latest
-      fail-fast: false
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Run Puppeteer Tests
-        id: test-run
-        uses: ./.github/actions/puppeteer-simple-test
-        with:
-          provider: "example"
-          project_name: "docsserver-daily"
-          suite: "daily"
-          launch_name: "Daily Tests"
-          os_name: ${{ matrix.os.name }}
-          read_pat: ${{ secrets.READ_PAT }}
-          report_key: ${{ secrets.REPORT_KEY }}
-
-      - name: Get Job ID
-        if: always()
-        id: job-id
         shell: bash
         run: |
-          JOB_NAME="Example - ${{ matrix.os.name }}"
-          JOB_ID=$(gh run view ${{ github.run_id }} --json jobs | jq -r --arg name "$JOB_NAME" '.jobs[] | select(.name == $name) | .databaseId')
-          echo "job-id=$JOB_ID" >> $GITHUB_OUTPUT
+          format_chunks() {
+            local chunks_json="$1"
+            if [[ "$chunks_json" == "[]" || -z "$chunks_json" ]]; then
+              echo "  No chunks found"
+              return
+            fi
+            echo "$chunks_json" | jq -r 'sort_by(.name) | .[] |
+              if .conclusion == "success" then "  \u2705 "
+              elif .conclusion == "failure" then "  \u274C "
+              elif .conclusion == "cancelled" then "  \u26D4 "
+              else "  \u2753 " end +
+              "[" + .name + "](" + .url + ")"'
+          }
+          CHUNKS_OUTPUT=$(format_chunks '${{ steps.collect-chunks.outputs.chunks }}')
+          FAILED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "failure")] | length')
+          CANCELLED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "cancelled")] | length')
+          SUCCESS_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "success")] | length')
+          TOTAL_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq 'length')
+          if [[ "$FAILED_COUNT" -gt 0 ]]; then
+            OVERALL_STATUS="\u274C Chunks failed (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
+          elif [[ "$CANCELLED_COUNT" -gt 0 ]]; then
+            OVERALL_STATUS="\u26D4 Some chunks cancelled (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
+          elif [[ "$SUCCESS_COUNT" -eq "$TOTAL_COUNT" ]] && [[ "$TOTAL_COUNT" -gt 0 ]]; then
+            OVERALL_STATUS="\u2705 All chunks passed (${TOTAL_COUNT}/${TOTAL_COUNT})"
+          else
+            OVERALL_STATUS="\u2753 Chunks status unknown"
+          fi
+          MESSAGE="\n*Workflow:* ${{ github.workflow }}\n*Provider:* ocis\n*OS:* ${{ matrix.os.name }}\n*Status:* ${OVERALL_STATUS}"
+          MESSAGE="${MESSAGE}\n*Chunk Jobs:*"
+          MESSAGE="${MESSAGE}\n${CHUNKS_OUTPUT}"
+          MESSAGE="${MESSAGE}\n[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          if [[ -n "${{ steps.get-rp-url.outputs.rp_url }}" ]]; then MESSAGE="${MESSAGE}\n[View Report Portal](${{ steps.get-rp-url.outputs.rp_url }})"; fi
+          MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')
+          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
+            -H "Content-Type: application/json" \
+            -d "{\"chat_id\":\"${{ secrets.TELEGRAM_TO }}\",\"text\":\"$MESSAGE\",\"parse_mode\":\"Markdown\",\"disable_notification\":true,\"disable_web_page_preview\":true}"
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-
-      - name: Send message to Telegram
-        if: always()
-        uses: ./.github/actions/telegram-notify
-        with:
-          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
-          telegram_to: ${{ secrets.TELEGRAM_TO }}
-          os_name: ${{ matrix.os.name }}
-          provider: "example"
-          job_status: ${{ job.status }}
-          job_id: ${{ steps.job-id.outputs.job-id }}
-          rp_url: ${{ steps.test-run.outputs.rp_launch_url }}
-
+          GITHUB_TOKEN: ${{ secrets.READ_PAT }}

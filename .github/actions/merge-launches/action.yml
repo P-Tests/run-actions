@@ -17,6 +17,10 @@ inputs:
   github-token:
     description: 'GitHub token for accessing private repository'
     required: true
+  launch-name:
+    description: 'Name for the merged launch'
+    required: false
+    default: 'Github Action All Tests'
 
 outputs:
   rp_launch_url:
@@ -80,7 +84,7 @@ runs:
         set +e
         python merge_launches.py \
           --launch-uuids $UUID_LIST \
-          --name "Github Action All Tests" \
+          --name "${{ inputs.launch-name }}" \
           --merge-type DEEP \
           --description " " 2>&1 | tee merge_output.log
         EXIT_CODE=$?
