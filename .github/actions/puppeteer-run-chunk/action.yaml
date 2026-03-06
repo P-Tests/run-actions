@@ -42,6 +42,10 @@ inputs:
   report_key:
     description: 'Report Portal API key'
     required: true
+  test_path:
+    description: 'Path to specific test file (optional, runs full suite if empty)'
+    required: false
+    default: ''
 
 outputs:
   uuid:
@@ -145,13 +149,17 @@ runs:
       working-directory: Dep.Tests/puppeteer/engine
       run: |
         set +e
+        TEST_PATH_ARG=""
+        if [ -n "${{ inputs.test_path }}" ]; then
+          TEST_PATH_ARG="--spec ${{ inputs.test_path }}"
+        fi
         python run.py \
           --providers ${{ inputs.provider }} \
           --chunk-id ${{ inputs.chunk_id }} \
           --chunk-size ${{ inputs.chunk_size }} \
           --disable_animation \
           --config_params puppeteerOptions.headless=true \
-          --connect_portal 2>&1 | tee output.log
+          --connect_portal $TEST_PATH_ARG 2>&1 | tee output.log
         EXIT_CODE=$?
         set -e
 

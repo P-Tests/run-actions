@@ -4,10 +4,49 @@ on:
   schedule:
     - cron: '0 * * * *'
   workflow_dispatch:
+    inputs:
+      os:
+        description: 'Operating system'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - windows
+          - linux
+          - macos
+      test_path:
+        description: 'Path to specific test file (optional)'
+        required: false
+        default: ''
+        type: string
 
 jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - id: set-matrix
+        shell: bash
+        run: |
+          OS="${{ inputs.os }}"
+          if [ -z "$OS" ] || [ "$OS" == "all" ]; then
+            echo 'matrix={"os":[{"name":"windows","runner":"windows-latest"},{"name":"linux","runner":"ubuntu-latest"},{"name":"macos","runner":"macos-latest"}]}' >> $GITHUB_OUTPUT
+          elif [ "$OS" == "windows" ]; then
+            echo 'matrix={"os":[{"name":"windows","runner":"windows-latest"}]}' >> $GITHUB_OUTPUT
+          elif [ "$OS" == "linux" ]; then
+            echo 'matrix={"os":[{"name":"linux","runner":"ubuntu-latest"}]}' >> $GITHUB_OUTPUT
+          elif [ "$OS" == "macos" ]; then
+            echo 'matrix={"os":[{"name":"macos","runner":"macos-latest"}]}' >> $GITHUB_OUTPUT
+          fi
+
   test-docspace-eu:
-    runs-on: windows-latest
+    needs: setup
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
+      fail-fast: false
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -20,9 +59,10 @@ jobs:
           suite: "hourly"
           launch_name: "Hourly Tests - docspaceEU"
           project_name: "docspace-saas"
-          os_name: "windows"
+          os_name: ${{ matrix.os.name }}
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ secrets.REPORT_KEY }}
+          test_path: ${{ inputs.test_path }}
 
       - name: Get Job ID
         if: always()
@@ -35,14 +75,18 @@ jobs:
         with:
           telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
           telegram_to: ${{ secrets.TELEGRAM_TO }}
-          os_name: 'windows'
+          os_name: ${{ matrix.os.name }}
           provider: 'docspaceEU'
           job_status: ${{ job.status }}
           job_id: ${{ steps.job-id.outputs.job-id }}
           rp_url: ${{ steps.test-run.outputs.rp_launch_url }}
 
   test-docspace-us:
-    runs-on: windows-latest
+    needs: setup
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
+      fail-fast: false
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -55,9 +99,10 @@ jobs:
           suite: "hourly"
           launch_name: "Hourly Tests - docspaceUS"
           project_name: "docspace-saas"
-          os_name: "windows"
+          os_name: ${{ matrix.os.name }}
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ secrets.REPORT_KEY }}
+          test_path: ${{ inputs.test_path }}
 
       - name: Get Job ID
         if: always()
@@ -70,7 +115,7 @@ jobs:
         with:
           telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
           telegram_to: ${{ secrets.TELEGRAM_TO }}
-          os_name: 'windows'
+          os_name: ${{ matrix.os.name }}
           provider: 'docspaceUS'
           job_status: ${{ job.status }}
           job_id: ${{ steps.job-id.outputs.job-id }}

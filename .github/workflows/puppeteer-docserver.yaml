@@ -13,6 +13,21 @@ on:
         - release
         - hotfix
         - develop
+      os:
+        description: 'Operating system'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - windows
+          - linux
+          - macos
+      test_path:
+        description: 'Path to specific test file (optional)'
+        required: false
+        default: ''
+        type: string
       chunk_size:
         description: 'Number of tests per chunk'
         required: false
@@ -47,7 +62,7 @@ jobs:
   run-tests-windows:
     name: Windows - Chunk ${{ matrix.chunk }}
     needs: prepare
-    if: "!cancelled()"
+    if: "!cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows')"
     runs-on: windows-latest
     strategy:
       matrix:
@@ -73,12 +88,13 @@ jobs:
           project_name: docsserver
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ secrets.REPORT_KEY }}
+          test_path: ${{ inputs.test_path }}
 
   collect-uuids-windows:
     name: Collect Windows UUIDs
     needs: [run-tests-windows]
     runs-on: ubuntu-latest
-    if: "!cancelled()"
+    if: "!cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows')"
     outputs:
       launch_uuids: ${{ steps.collect.outputs.launch_uuids }}
 
@@ -96,7 +112,7 @@ jobs:
     name: Merge Windows Launches
     needs: [collect-uuids-windows]
     runs-on: ubuntu-latest
-    if: "!cancelled()"
+    if: "!cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows')"
     outputs:
       rp_launch_url: ${{ steps.merge.outputs.rp_launch_url }}
 
@@ -117,7 +133,7 @@ jobs:
   run-tests-linux:
     name: Linux - Chunk ${{ matrix.chunk }}
     needs: [prepare]
-    if: "!cancelled()"
+    if: "!cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux')"
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -143,12 +159,13 @@ jobs:
           project_name: docsserver
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ secrets.REPORT_KEY }}
+          test_path: ${{ inputs.test_path }}
 
   collect-uuids-linux:
     name: Collect Linux UUIDs
     needs: [run-tests-linux]
     runs-on: ubuntu-latest
-    if: "!cancelled()"
+    if: "!cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux')"
     outputs:
       launch_uuids: ${{ steps.collect.outputs.launch_uuids }}
 
@@ -166,7 +183,7 @@ jobs:
     name: Merge Linux Launches
     needs: [collect-uuids-linux]
     runs-on: ubuntu-latest
-    if: "!cancelled()"
+    if: "!cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux')"
     outputs:
       rp_launch_url: ${{ steps.merge.outputs.rp_launch_url }}
 
@@ -187,7 +204,7 @@ jobs:
   run-tests-macos:
     name: macOS - Chunk ${{ matrix.chunk }}
     needs: [prepare]
-    if: "!cancelled()"
+    if: "!cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos')"
     runs-on: macos-latest
     strategy:
       matrix:
@@ -213,12 +230,13 @@ jobs:
           project_name: docsserver
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ secrets.REPORT_KEY }}
+          test_path: ${{ inputs.test_path }}
 
   collect-uuids-macos:
     name: Collect macOS UUIDs
     needs: [run-tests-macos]
     runs-on: ubuntu-latest
-    if: "!cancelled()"
+    if: "!cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos')"
     outputs:
       launch_uuids: ${{ steps.collect.outputs.launch_uuids }}
 
@@ -236,7 +254,7 @@ jobs:
     name: Merge macOS Launches
     needs: [collect-uuids-macos]
     runs-on: ubuntu-latest
-    if: "!cancelled()"
+    if: "!cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos')"
     outputs:
       rp_launch_url: ${{ steps.merge.outputs.rp_launch_url }}
 
@@ -258,7 +276,7 @@ jobs:
     name: Windows Test Summary
     needs: [merge-launches-windows]
     runs-on: ubuntu-latest
-    if: "!cancelled()"
+    if: "!cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows')"
 
     steps:
       - name: Checkout repository
@@ -355,7 +373,7 @@ jobs:
     name: Linux Test Summary
     needs: [merge-launches-linux]
     runs-on: ubuntu-latest
-    if: "!cancelled()"
+    if: "!cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux')"
 
     steps:
       - name: Checkout repository
@@ -452,7 +470,7 @@ jobs:
     name: macOS Test Summary
     needs: [merge-launches-macos]
     runs-on: ubuntu-latest
-    if: "!cancelled()"
+    if: "!cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos')"
 
     steps:
       - name: Checkout repository

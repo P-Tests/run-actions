@@ -42,6 +42,10 @@ inputs:
   report_key:
     description: 'Report Portal API key'
     required: true
+  test_path:
+    description: 'Path to specific test file (optional, runs full suite if empty)'
+    required: false
+    default: ''
 
 outputs:
   rp_launch_url:
@@ -167,11 +171,15 @@ runs:
       working-directory: Dep.Tests/puppeteer/engine
       run: |
         set +e
+        TEST_PATH_ARG=""
+        if [ -n "${{ inputs.test_path }}" ]; then
+          TEST_PATH_ARG="--spec ${{ inputs.test_path }}"
+        fi
         python run.py \
           --suite ${{ inputs.suite }} \
           --disable_animation \
           --config_params puppeteerOptions.headless=true \
-          --providers ${{ inputs.provider }} 2>&1 | tee test_output.log
+          --providers ${{ inputs.provider }} $TEST_PATH_ARG 2>&1 | tee test_output.log
         EXIT_CODE=$?
         set -e
 
