@@ -73,6 +73,7 @@ runs:
         path: Dep.Tests
         token: ${{ inputs.read_pat }}
         submodules: recursive
+        fetch-depth: 1
 
     - name: Set up Python
       uses: actions/setup-python@v5
