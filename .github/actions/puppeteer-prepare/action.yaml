@@ -9,6 +9,10 @@ inputs:
     description: 'Number of tests per chunk'
     required: false
     default: '500'
+  branch:
+    description: 'Dep.Tests branch to checkout'
+    required: false
+    default: 'master'
   read_pat:
     description: 'GitHub PAT for private repository access'
     required: true
@@ -43,6 +47,7 @@ runs:
         token: ${{ inputs.read_pat }}
         submodules: recursive
         fetch-depth: 1
+        ref: ${{ inputs.branch }}
 
     - name: Set up Python
       uses: actions/setup-python@v5

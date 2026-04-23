@@ -25,6 +25,31 @@ on:
         required: false
         default: '100'
         type: string
+      branch:
+        description: 'Dep.Tests branch to checkout'
+        required: false
+        default: 'master'
+        type: string
+      api_key:
+        description: 'ReportPortal API key (overrides secret REPORT_KEY)'
+        required: false
+        default: ''
+        type: string
+      launch_name:
+        description: 'ReportPortal launch name'
+        required: false
+        default: ''
+        type: string
+      project_name:
+        description: 'ReportPortal project name'
+        required: false
+        default: 'docsserver-daily'
+        type: string
+      clean:
+        description: 'Clear test files from the remote server during the run'
+        required: false
+        default: true
+        type: boolean
 
 jobs:
   setup:
@@ -50,7 +75,6 @@ jobs:
 
   prepare-docspaceEU:
     name: Prepare - DocSpace EU
-    needs: setup
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.prepare.outputs.matrix }}
@@ -66,6 +90,7 @@ jobs:
           provider: docspaceEU
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
           chunk_size: ${{ inputs.chunk_size || '100' }}
+          branch: ${{ inputs.branch || 'master' }}
           read_pat: ${{ secrets.READ_PAT }}
           test_path: ${{ inputs.test_path }}
 
@@ -91,11 +116,13 @@ jobs:
           chunk_size: ${{ needs.prepare-docspaceEU.outputs.chunk_size }}
           os_name: ${{ matrix.os.name }}
           os_config: config_chrome_${{ matrix.os.config }}.json
-          project_name: docsserver-daily
-          launch_name: "Daily Tests${{ needs.prepare-docspaceEU.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '' }}"
+          project_name: ${{ inputs.project_name || 'docsserver-daily' }}
+          launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-docspaceEU.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
-          report_key: ${{ secrets.REPORT_KEY }}
+          branch: ${{ inputs.branch || 'master' }}
+          report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           test_path: ${{ inputs.test_path }}
+          clean: ${{ inputs.clean }}
 
   post-docspaceEU:
     name: Post - DocSpace EU - ${{ matrix.os.name }}
@@ -128,6 +155,7 @@ jobs:
           api-key: ${{ secrets.REPORT_KEY }}
           project-name: docsserver-daily
           github-token: ${{ secrets.READ_PAT }}
+          branch: ${{ inputs.branch || 'master' }}
           launch-name: Daily Tests
 
       - name: Download URL artifact (single chunk)
@@ -206,7 +234,6 @@ jobs:
 
   prepare-docspaceUS:
     name: Prepare - DocSpace US
-    needs: setup
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.prepare.outputs.matrix }}
@@ -222,6 +249,7 @@ jobs:
           provider: docspaceUS
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
           chunk_size: ${{ inputs.chunk_size || '100' }}
+          branch: ${{ inputs.branch || 'master' }}
           read_pat: ${{ secrets.READ_PAT }}
           test_path: ${{ inputs.test_path }}
 
@@ -247,11 +275,13 @@ jobs:
           chunk_size: ${{ needs.prepare-docspaceUS.outputs.chunk_size }}
           os_name: ${{ matrix.os.name }}
           os_config: config_chrome_${{ matrix.os.config }}.json
-          project_name: docsserver-daily
-          launch_name: "Daily Tests${{ needs.prepare-docspaceUS.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '' }}"
+          project_name: ${{ inputs.project_name || 'docsserver-daily' }}
+          launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-docspaceUS.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
-          report_key: ${{ secrets.REPORT_KEY }}
+          branch: ${{ inputs.branch || 'master' }}
+          report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           test_path: ${{ inputs.test_path }}
+          clean: ${{ inputs.clean }}
 
   post-docspaceUS:
     name: Post - DocSpace US - ${{ matrix.os.name }}
@@ -284,6 +314,7 @@ jobs:
           api-key: ${{ secrets.REPORT_KEY }}
           project-name: docsserver-daily
           github-token: ${{ secrets.READ_PAT }}
+          branch: ${{ inputs.branch || 'master' }}
           launch-name: Daily Tests
 
       - name: Download URL artifact (single chunk)
@@ -362,7 +393,6 @@ jobs:
 
   prepare-ncoc:
     name: Prepare - NCOC
-    needs: setup
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.prepare.outputs.matrix }}
@@ -378,6 +408,7 @@ jobs:
           provider: ncoc
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
           chunk_size: ${{ inputs.chunk_size || '100' }}
+          branch: ${{ inputs.branch || 'master' }}
           read_pat: ${{ secrets.READ_PAT }}
           test_path: ${{ inputs.test_path }}
 
@@ -403,11 +434,13 @@ jobs:
           chunk_size: ${{ needs.prepare-ncoc.outputs.chunk_size }}
           os_name: ${{ matrix.os.name }}
           os_config: config_chrome_${{ matrix.os.config }}.json
-          project_name: docsserver-daily
-          launch_name: "Daily Tests${{ needs.prepare-ncoc.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '' }}"
+          project_name: ${{ inputs.project_name || 'docsserver-daily' }}
+          launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-ncoc.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
-          report_key: ${{ secrets.REPORT_KEY }}
+          branch: ${{ inputs.branch || 'master' }}
+          report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           test_path: ${{ inputs.test_path }}
+          clean: ${{ inputs.clean }}
 
   post-ncoc:
     name: Post - NCOC - ${{ matrix.os.name }}
@@ -440,6 +473,7 @@ jobs:
           api-key: ${{ secrets.REPORT_KEY }}
           project-name: docsserver-daily
           github-token: ${{ secrets.READ_PAT }}
+          branch: ${{ inputs.branch || 'master' }}
           launch-name: Daily Tests
 
       - name: Download URL artifact (single chunk)
@@ -518,7 +552,6 @@ jobs:
 
   prepare-ocis:
     name: Prepare - OCIS
-    needs: setup
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.prepare.outputs.matrix }}
@@ -534,6 +567,7 @@ jobs:
           provider: ocis
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
           chunk_size: ${{ inputs.chunk_size || '100' }}
+          branch: ${{ inputs.branch || 'master' }}
           read_pat: ${{ secrets.READ_PAT }}
           test_path: ${{ inputs.test_path }}
 
@@ -559,11 +593,13 @@ jobs:
           chunk_size: ${{ needs.prepare-ocis.outputs.chunk_size }}
           os_name: ${{ matrix.os.name }}
           os_config: config_chrome_${{ matrix.os.config }}.json
-          project_name: docsserver-daily
-          launch_name: "Daily Tests${{ needs.prepare-ocis.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '' }}"
+          project_name: ${{ inputs.project_name || 'docsserver-daily' }}
+          launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-ocis.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
-          report_key: ${{ secrets.REPORT_KEY }}
+          branch: ${{ inputs.branch || 'master' }}
+          report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           test_path: ${{ inputs.test_path }}
+          clean: ${{ inputs.clean }}
 
   post-ocis:
     name: Post - OCIS - ${{ matrix.os.name }}
@@ -596,6 +632,7 @@ jobs:
           api-key: ${{ secrets.REPORT_KEY }}
           project-name: docsserver-daily
           github-token: ${{ secrets.READ_PAT }}
+          branch: ${{ inputs.branch || 'master' }}
           launch-name: Daily Tests
 
       - name: Download URL artifact (single chunk)

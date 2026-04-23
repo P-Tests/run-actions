@@ -33,6 +33,31 @@ on:
         required: false
         default: '100'
         type: string
+      branch:
+        description: 'Dep.Tests branch to checkout'
+        required: false
+        default: 'master'
+        type: string
+      api_key:
+        description: 'ReportPortal API key (overrides secret REPORT_KEY)'
+        required: false
+        default: ''
+        type: string
+      project_name:
+        description: 'ReportPortal project name'
+        required: false
+        default: 'docsserver'
+        type: string
+      launch_name:
+        description: 'ReportPortal launch name (optional; default per run type)'
+        required: false
+        default: ''
+        type: string
+      clean:
+        description: 'Clear test files from the remote server during the run'
+        required: false
+        default: true
+        type: boolean
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.inputs.url }}
@@ -57,6 +82,7 @@ jobs:
         with:
           provider: example
           chunk_size: ${{ github.event.inputs.chunk_size }}
+          branch: ${{ inputs.branch || 'master' }}
           read_pat: ${{ secrets.READ_PAT }}
           test_path: ${{ inputs.test_path }}
 
@@ -86,11 +112,13 @@ jobs:
           url_release: ${{ secrets.URL_RELEASE }}
           url_hotfix: ${{ secrets.URL_HOTFIX }}
           url_develop: ${{ secrets.URL_DEVELOP }}
-          project_name: docsserver
+          project_name: ${{ inputs.project_name || 'docsserver' }}
           read_pat: ${{ secrets.READ_PAT }}
-          report_key: ${{ secrets.REPORT_KEY }}
+          report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          branch: ${{ inputs.branch || 'master' }}
           test_path: ${{ inputs.test_path }}
-          launch_name: "${{ inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests' }}${{ needs.prepare.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '' }}"
+          clean: ${{ inputs.clean }}
+          launch_name: "${{ inputs.launch_name || format('{0}{1}', inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests', needs.prepare.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
 
   collect-uuids-windows:
     name: Collect Windows UUIDs
@@ -132,6 +160,7 @@ jobs:
           api-key: ${{ secrets.REPORT_KEY }}
           project-name: docsserver
           github-token: ${{ secrets.READ_PAT }}
+          branch: ${{ inputs.branch || 'master' }}
           launch-name: ${{ inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests' }}
 
   run-tests-linux:
@@ -160,11 +189,13 @@ jobs:
           url_release: ${{ secrets.URL_RELEASE }}
           url_hotfix: ${{ secrets.URL_HOTFIX }}
           url_develop: ${{ secrets.URL_DEVELOP }}
-          project_name: docsserver
+          project_name: ${{ inputs.project_name || 'docsserver' }}
           read_pat: ${{ secrets.READ_PAT }}
-          report_key: ${{ secrets.REPORT_KEY }}
+          report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          branch: ${{ inputs.branch || 'master' }}
           test_path: ${{ inputs.test_path }}
-          launch_name: "${{ inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests' }}${{ needs.prepare.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '' }}"
+          clean: ${{ inputs.clean }}
+          launch_name: "${{ inputs.launch_name || format('{0}{1}', inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests', needs.prepare.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
 
   collect-uuids-linux:
     name: Collect Linux UUIDs
@@ -206,6 +237,7 @@ jobs:
           api-key: ${{ secrets.REPORT_KEY }}
           project-name: docsserver
           github-token: ${{ secrets.READ_PAT }}
+          branch: ${{ inputs.branch || 'master' }}
           launch-name: ${{ inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests' }}
 
   run-tests-macos:
@@ -234,11 +266,13 @@ jobs:
           url_release: ${{ secrets.URL_RELEASE }}
           url_hotfix: ${{ secrets.URL_HOTFIX }}
           url_develop: ${{ secrets.URL_DEVELOP }}
-          project_name: docsserver
+          project_name: ${{ inputs.project_name || 'docsserver' }}
           read_pat: ${{ secrets.READ_PAT }}
-          report_key: ${{ secrets.REPORT_KEY }}
+          report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          branch: ${{ inputs.branch || 'master' }}
           test_path: ${{ inputs.test_path }}
-          launch_name: "${{ inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests' }}${{ needs.prepare.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '' }}"
+          clean: ${{ inputs.clean }}
+          launch_name: "${{ inputs.launch_name || format('{0}{1}', inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests', needs.prepare.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
 
   collect-uuids-macos:
     name: Collect macOS UUIDs
@@ -280,6 +314,7 @@ jobs:
           api-key: ${{ secrets.REPORT_KEY }}
           project-name: docsserver
           github-token: ${{ secrets.READ_PAT }}
+          branch: ${{ inputs.branch || 'master' }}
           launch-name: ${{ inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests' }}
 
   final-summary-windows:
@@ -324,74 +359,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.READ_PAT }}
 
-      - name: Send comprehensive Telegram notification
-        if: always()
-        shell: bash
-        run: |
-          format_chunks() {
-            local chunks_json="$1"
-
-            if [[ "$chunks_json" == "[]" || -z "$chunks_json" ]]; then
-              echo "  No chunks found"
-              return
-            fi
-
-            echo "$chunks_json" | jq -r 'sort_by(.name) | .[] |
-              if .conclusion == "success" then "  \u2705 "
-              elif .conclusion == "failure" then "  \u274C "
-              elif .conclusion == "cancelled" then "  \u1F6AB "
-              elif .conclusion == "skipped" then "  \u23ED\uFE0F "
-              else "  \u2753 " end +
-              "[" + .name + "](" + .url + ")"'
-          }
-
-          CHUNKS_OUTPUT=$(format_chunks '${{ steps.collect-chunks.outputs.chunks }}')
-
-          FAILED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "failure")] | length')
-          CANCELLED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "cancelled")] | length')
-          SUCCESS_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "success")] | length')
-          TOTAL_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq 'length')
-
-          if [[ "$FAILED_COUNT" -gt 0 ]]; then
-            OVERALL_STATUS="\u274C Chunks failed (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
-          elif [[ "$CANCELLED_COUNT" -gt 0 ]]; then
-            OVERALL_STATUS="\u1F6AB Some chunks cancelled (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
-          elif [[ "$SUCCESS_COUNT" -eq "$TOTAL_COUNT" ]] && [[ "$TOTAL_COUNT" -gt 0 ]]; then
-            OVERALL_STATUS="\u2705 All chunks passed (${TOTAL_COUNT}/${TOTAL_COUNT})"
-          else
-            OVERALL_STATUS="\u2753 Chunks status unknown"
-          fi
-
-          MESSAGE="${MESSAGE}\n*Workflow:* ${{ github.workflow }}"
-          MESSAGE="${MESSAGE}\n*Provider:* example"
-          MESSAGE="${MESSAGE}\n*Stand:* ${{ github.event.inputs.url }}"
-          MESSAGE="${MESSAGE}\n*Status:* ${OVERALL_STATUS}"
-          MESSAGE="${MESSAGE}\n*Chunk Jobs:*"
-          MESSAGE="${MESSAGE}\n${CHUNKS_OUTPUT}"
-          MESSAGE="${MESSAGE}\n"
-
-          if [[ "${{ needs.prepare.outputs.num_chunks }}" -gt 1 ]]; then
-            MESSAGE="${MESSAGE}\n[View Merge Job](${{ steps.collect-chunks.outputs.merge_url }})"
-          fi
-
-          MESSAGE="${MESSAGE}\n[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
-
-          if [[ -n "${{ steps.get-rp-url.outputs.rp_url }}" ]]; then
-            MESSAGE="${MESSAGE}\n[View Report Portal](${{ steps.get-rp-url.outputs.rp_url }})"
-          fi
-
-          MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')
-
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"chat_id\": \"${{ secrets.TELEGRAM_TO }}\",
-              \"text\": \"$MESSAGE\",
-              \"parse_mode\": \"Markdown\",
-              \"disable_notification\": true,
-              \"disable_web_page_preview\": true
-            }"
-
   final-summary-linux:
     name: Linux Test Summary
     needs: [prepare, run-tests-linux, merge-launches-linux]
@@ -434,74 +401,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.READ_PAT }}
 
-      - name: Send comprehensive Telegram notification
-        if: always()
-        shell: bash
-        run: |
-          format_chunks() {
-            local chunks_json="$1"
-
-            if [[ "$chunks_json" == "[]" || -z "$chunks_json" ]]; then
-              echo "  No chunks found"
-              return
-            fi
-
-            echo "$chunks_json" | jq -r 'sort_by(.name) | .[] |
-              if .conclusion == "success" then "  \u2705 "
-              elif .conclusion == "failure" then "  \u274C "
-              elif .conclusion == "cancelled" then "  \u1F6AB "
-              elif .conclusion == "skipped" then "  \u23ED\uFE0F "
-              else "  \u2753 " end +
-              "[" + .name + "](" + .url + ")"'
-          }
-
-          CHUNKS_OUTPUT=$(format_chunks '${{ steps.collect-chunks.outputs.chunks }}')
-
-          FAILED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "failure")] | length')
-          CANCELLED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "cancelled")] | length')
-          SUCCESS_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "success")] | length')
-          TOTAL_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq 'length')
-
-          if [[ "$FAILED_COUNT" -gt 0 ]]; then
-            OVERALL_STATUS="\u274C Chunks failed (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
-          elif [[ "$CANCELLED_COUNT" -gt 0 ]]; then
-            OVERALL_STATUS="\u1F6AB Some chunks cancelled (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
-          elif [[ "$SUCCESS_COUNT" -eq "$TOTAL_COUNT" ]] && [[ "$TOTAL_COUNT" -gt 0 ]]; then
-            OVERALL_STATUS="\u2705 All chunks passed (${TOTAL_COUNT}/${TOTAL_COUNT})"
-          else
-            OVERALL_STATUS="\u2753 Chunks status unknown"
-          fi
-
-          MESSAGE="${MESSAGE}\n*Workflow:* ${{ github.workflow }}"
-          MESSAGE="${MESSAGE}\n*Provider:* example"
-          MESSAGE="${MESSAGE}\n*Stand:* ${{ github.event.inputs.url }}"
-          MESSAGE="${MESSAGE}\n*Status:* ${OVERALL_STATUS}"
-          MESSAGE="${MESSAGE}\n*Chunk Jobs:*"
-          MESSAGE="${MESSAGE}\n${CHUNKS_OUTPUT}"
-          MESSAGE="${MESSAGE}\n"
-
-          if [[ "${{ needs.prepare.outputs.num_chunks }}" -gt 1 ]]; then
-            MESSAGE="${MESSAGE}\n[View Merge Job](${{ steps.collect-chunks.outputs.merge_url }})"
-          fi
-
-          MESSAGE="${MESSAGE}\n[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
-
-          if [[ -n "${{ steps.get-rp-url.outputs.rp_url }}" ]]; then
-            MESSAGE="${MESSAGE}\n[View Report Portal](${{ steps.get-rp-url.outputs.rp_url }})"
-          fi
-
-          MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')
-
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"chat_id\": \"${{ secrets.TELEGRAM_TO }}\",
-              \"text\": \"$MESSAGE\",
-              \"parse_mode\": \"Markdown\",
-              \"disable_notification\": true,
-              \"disable_web_page_preview\": true
-            }"
-
   final-summary-macos:
     name: macOS Test Summary
     needs: [prepare, run-tests-macos, merge-launches-macos]
@@ -543,71 +442,3 @@ jobs:
           echo "merge_url=$MERGE_URL" >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.READ_PAT }}
-
-      - name: Send comprehensive Telegram notification
-        if: always()
-        shell: bash
-        run: |
-          format_chunks() {
-            local chunks_json="$1"
-
-            if [[ "$chunks_json" == "[]" || -z "$chunks_json" ]]; then
-              echo "  No chunks found"
-              return
-            fi
-
-            echo "$chunks_json" | jq -r 'sort_by(.name) | .[] |
-              if .conclusion == "success" then "  \u2705 "
-              elif .conclusion == "failure" then "  \u274C "
-              elif .conclusion == "cancelled" then "  \u1F6AB "
-              elif .conclusion == "skipped" then "  \u23ED\uFE0F "
-              else "  \u2753 " end +
-              "[" + .name + "](" + .url + ")"'
-          }
-
-          CHUNKS_OUTPUT=$(format_chunks '${{ steps.collect-chunks.outputs.chunks }}')
-
-          FAILED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "failure")] | length')
-          CANCELLED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "cancelled")] | length')
-          SUCCESS_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "success")] | length')
-          TOTAL_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq 'length')
-
-          if [[ "$FAILED_COUNT" -gt 0 ]]; then
-            OVERALL_STATUS="\u274C Chunks failed (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
-          elif [[ "$CANCELLED_COUNT" -gt 0 ]]; then
-            OVERALL_STATUS="\u1F6AB Some chunks cancelled (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
-          elif [[ "$SUCCESS_COUNT" -eq "$TOTAL_COUNT" ]] && [[ "$TOTAL_COUNT" -gt 0 ]]; then
-            OVERALL_STATUS="\u2705 All chunks passed (${TOTAL_COUNT}/${TOTAL_COUNT})"
-          else
-            OVERALL_STATUS="\u2753 Chunks status unknown"
-          fi
-
-          MESSAGE="${MESSAGE}\n*Workflow:* ${{ github.workflow }}"
-          MESSAGE="${MESSAGE}\n*Provider:* example"
-          MESSAGE="${MESSAGE}\n*Stand:* ${{ github.event.inputs.url }}"
-          MESSAGE="${MESSAGE}\n*Status:* ${OVERALL_STATUS}"
-          MESSAGE="${MESSAGE}\n*Chunk Jobs:*"
-          MESSAGE="${MESSAGE}\n${CHUNKS_OUTPUT}"
-          MESSAGE="${MESSAGE}\n"
-
-          if [[ "${{ needs.prepare.outputs.num_chunks }}" -gt 1 ]]; then
-            MESSAGE="${MESSAGE}\n[View Merge Job](${{ steps.collect-chunks.outputs.merge_url }})"
-          fi
-
-          MESSAGE="${MESSAGE}\n[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
-
-          if [[ -n "${{ steps.get-rp-url.outputs.rp_url }}" ]]; then
-            MESSAGE="${MESSAGE}\n[View Report Portal](${{ steps.get-rp-url.outputs.rp_url }})"
-          fi
-
-          MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')
-
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
-            -H "Content-Type: application/json" \
-            -d "{
-              \"chat_id\": \"${{ secrets.TELEGRAM_TO }}\",
-              \"text\": \"$MESSAGE\",
-              \"parse_mode\": \"Markdown\",
-              \"disable_notification\": true,
-              \"disable_web_page_preview\": true
-            }"

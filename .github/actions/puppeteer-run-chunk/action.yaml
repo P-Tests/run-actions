@@ -44,6 +44,10 @@ inputs:
     description: 'Report Portal launch name (optional)'
     required: false
     default: ''
+  branch:
+    description: 'Dep.Tests branch to checkout'
+    required: false
+    default: 'master'
   read_pat:
     description: 'GitHub PAT for private repository access'
     required: true
@@ -54,6 +58,10 @@ inputs:
     description: 'Path to specific test file or dir (optional, runs full suite if empty)'
     required: false
     default: ''
+  clean:
+    description: 'Clear test files from the remote server during the run'
+    required: false
+    default: 'true'
 
 outputs:
   uuid:
@@ -73,6 +81,7 @@ runs:
         path: Dep.Tests
         token: ${{ inputs.read_pat }}
         submodules: recursive
+        ref: ${{ inputs.branch }}
         fetch-depth: 1
 
     - name: Set up Python
@@ -209,6 +218,14 @@ runs:
         rm -f output.log
 
         exit $EXIT_CODE
+
+    - name: Clear remote test files
+      if: ${{ always() && inputs.clean == 'true' }}
+      shell: bash
+      working-directory: Dep.Tests/puppeteer/engine
+      run: |
+        echo "Clearing remote files for ${{ inputs.provider }} after chunk ${{ inputs.chunk_id }}"
+        node script/js/scripts/clearRun.js "${{ inputs.provider }}" "../${{ inputs.os_config }}" || true
 
     - name: Upload Launch UUID
       if: always()
