@@ -36,6 +36,7 @@ runs:
         repository: ONLYOFFICE-data/Dep.Tests
         path: Dep.Tests
         token: ${{ inputs.github-token }}
+        ref: fix/editor-event-listener
         submodules: recursive
 
     - name: Set up Python

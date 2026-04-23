@@ -43,6 +43,7 @@ runs:
         token: ${{ inputs.read_pat }}
         submodules: recursive
         fetch-depth: 1
+        ref: fix/editor-event-listener
 
     - name: Set up Python
       uses: actions/setup-python@v5

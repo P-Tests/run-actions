@@ -73,6 +73,7 @@ runs:
         path: Dep.Tests
         token: ${{ inputs.read_pat }}
         submodules: recursive
+        ref: fix/editor-event-listener
         fetch-depth: 1
 
     - name: Set up Python
