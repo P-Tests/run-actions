@@ -157,8 +157,8 @@ jobs:
         with:
           os-name: windows
           launch-uuids: ${{ needs.collect-uuids-windows.outputs.launch_uuids }}
-          api-key: ${{ secrets.REPORT_KEY }}
-          project-name: docsserver
+          api-key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          project-name: ${{ inputs.project_name || 'docsserver' }}
           github-token: ${{ secrets.READ_PAT }}
           branch: ${{ inputs.branch || 'master' }}
           launch-name: ${{ inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests' }}
@@ -234,8 +234,8 @@ jobs:
         with:
           os-name: linux
           launch-uuids: ${{ needs.collect-uuids-linux.outputs.launch_uuids }}
-          api-key: ${{ secrets.REPORT_KEY }}
-          project-name: docsserver
+          api-key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          project-name: ${{ inputs.project_name || 'docsserver' }}
           github-token: ${{ secrets.READ_PAT }}
           branch: ${{ inputs.branch || 'master' }}
           launch-name: ${{ inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests' }}
@@ -311,8 +311,8 @@ jobs:
         with:
           os-name: macos
           launch-uuids: ${{ needs.collect-uuids-macos.outputs.launch_uuids }}
-          api-key: ${{ secrets.REPORT_KEY }}
-          project-name: docsserver
+          api-key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          project-name: ${{ inputs.project_name || 'docsserver' }}
           github-token: ${{ secrets.READ_PAT }}
           branch: ${{ inputs.branch || 'master' }}
           launch-name: ${{ inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests' }}

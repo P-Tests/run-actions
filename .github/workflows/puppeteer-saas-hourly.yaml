@@ -152,8 +152,8 @@ jobs:
         with:
           os-name: ${{ matrix.os.name }}
           launch-uuids: ${{ steps.collect.outputs.launch_uuids }}
-          api-key: ${{ secrets.REPORT_KEY }}
-          project-name: docspace-saas
+          api-key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          project-name: ${{ inputs.project_name || 'docspace-saas' }}
           github-token: ${{ secrets.READ_PAT }}
           branch: ${{ inputs.branch || 'master' }}
           launch-name: Hourly Tests - docspaceEU
@@ -311,8 +311,8 @@ jobs:
         with:
           os-name: ${{ matrix.os.name }}
           launch-uuids: ${{ steps.collect.outputs.launch_uuids }}
-          api-key: ${{ secrets.REPORT_KEY }}
-          project-name: docspace-saas
+          api-key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          project-name: ${{ inputs.project_name || 'docspace-saas' }}
           github-token: ${{ secrets.READ_PAT }}
           branch: ${{ inputs.branch || 'master' }}
           launch-name: Hourly Tests - docspaceUS

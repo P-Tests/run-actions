@@ -84,11 +84,13 @@ runs:
         ref: ${{ inputs.branch }}
         fetch-depth: 1
 
-    - name: Init specific submodule
-      shell: bash
-      run: |
-        cd Dep.Tests
-        git submodule update --init --depth 1 puppeteer/files
+    - name: Checkout puppeteer/files (pp-files submodule)
+      uses: actions/checkout@v4
+      with:
+        repository: ONLYOFFICE-data/pp-files
+        path: Dep.Tests/puppeteer/files
+        token: ${{ inputs.read_pat }}
+        fetch-depth: 1
 
     - name: Set up Python
       uses: actions/setup-python@v5
