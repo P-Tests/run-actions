@@ -80,9 +80,15 @@ runs:
         repository: ONLYOFFICE-data/Dep.Tests
         path: Dep.Tests
         token: ${{ inputs.read_pat }}
-        submodules: recursive
+        submodules: false
         ref: ${{ inputs.branch }}
         fetch-depth: 1
+
+    - name: Init specific submodule
+      shell: bash
+      run: |
+        cd Dep.Tests
+        git submodule update --init --depth 1 puppeteer/files
 
     - name: Set up Python
       uses: actions/setup-python@v5

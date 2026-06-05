@@ -41,7 +41,7 @@ runs:
         path: Dep.Tests
         token: ${{ inputs.github-token }}
         ref: ${{ inputs.branch }}
-        submodules: recursive
+        submodules: false
 
     - name: Set up Python
       uses: actions/setup-python@v5

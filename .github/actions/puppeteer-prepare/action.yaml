@@ -45,7 +45,7 @@ runs:
         repository: ONLYOFFICE-data/Dep.Tests
         path: Dep.Tests
         token: ${{ inputs.read_pat }}
-        submodules: recursive
+        submodules: false
         fetch-depth: 1
         ref: ${{ inputs.branch }}
 
