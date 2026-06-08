@@ -88,7 +88,7 @@ jobs:
 
   run-tests-windows:
     name: Windows - Chunk ${{ matrix.chunk }}
-    needs: prepare
+    needs: [prepare]
     if: "!cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows')"
     runs-on: windows-latest
     strategy:
@@ -319,7 +319,7 @@ jobs:
 
   final-summary-windows:
     name: Windows Test Summary
-    needs: [prepare, run-tests-windows, merge-launches-windows]
+    needs: [prepare, merge-launches-windows]
     runs-on: ubuntu-latest
     if: "!cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows')"
 
@@ -361,7 +361,7 @@ jobs:
 
   final-summary-linux:
     name: Linux Test Summary
-    needs: [prepare, run-tests-linux, merge-launches-linux]
+    needs: [prepare, merge-launches-linux]
     runs-on: ubuntu-latest
     if: "!cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux')"
 
@@ -403,7 +403,7 @@ jobs:
 
   final-summary-macos:
     name: macOS Test Summary
-    needs: [prepare, run-tests-macos, merge-launches-macos]
+    needs: [prepare, merge-launches-macos]
     runs-on: ubuntu-latest
     if: "!cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos')"
 
