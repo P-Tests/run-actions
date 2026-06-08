@@ -101,6 +101,8 @@ runs:
       uses: actions/setup-node@v4
       with:
         node-version: 'latest'
+        cache: 'npm'
+        cache-dependency-path: Dep.Tests/puppeteer/engine/package-lock.json
 
     - name: Install npm dependencies
       shell: bash
@@ -254,7 +256,7 @@ runs:
         if-no-files-found: warn
 
     - name: Upload test results
-      if: always()
+      if: failure()
       uses: actions/upload-artifact@v4
       with:
         name: results-${{ inputs.provider }}-${{ inputs.os_name }}-chunk-${{ inputs.chunk_id }}
