@@ -1,0 +1,77 @@
+name: 'Puppeteer Clear Remote Files'
+description: 'Clear test files left on a provider remote server (runs once, after all chunks of a provider)'
+
+inputs:
+  provider:
+    description: 'Provider to clear (e.g. docspaceEU, ncoc, ocis)'
+    required: true
+  os_config:
+    description: 'Base config file name used as clearRun base config'
+    required: false
+    default: 'config_chrome_linux.json'
+  branch:
+    description: 'Dep.Tests branch to checkout'
+    required: false
+    default: 'master'
+  read_pat:
+    description: 'GitHub PAT for private repository access'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout Dep.Tests repository
+      uses: actions/checkout@v4
+      with:
+        repository: ONLYOFFICE-data/Dep.Tests
+        path: Dep.Tests
+        token: ${{ inputs.read_pat }}
+        ref: ${{ inputs.branch }}
+        submodules: false
+        fetch-depth: 1
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 'latest'
+        cache: 'npm'
+        cache-dependency-path: Dep.Tests/puppeteer/engine/package-lock.json
+
+    - name: Install npm dependencies
+      shell: bash
+      working-directory: Dep.Tests/puppeteer/engine
+      run: npm ci --prefer-offline --no-audit
+
+    - name: Cache Puppeteer browsers
+      id: cache-puppeteer
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/puppeteer
+        key: ${{ runner.os }}-puppeteer-chrome-${{ hashFiles('Dep.Tests/puppeteer/engine/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-puppeteer-chrome-
+
+    - name: Install Chrome for Puppeteer
+      if: steps.cache-puppeteer.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        cd Dep.Tests/puppeteer/engine
+        npx puppeteer browsers install chrome
+
+    - name: Generate method descriptions
+      shell: bash
+      working-directory: Dep.Tests/puppeteer/engine
+      # run.py generates engine/descriptions/methodsDescription.json on startup; clearRun needs it to load the provider module tree
+      run: python run.py --count-tests --providers ${{ inputs.provider }} > /dev/null 2>&1 || true
+
+    - name: Clear remote test files
+      shell: bash
+      working-directory: Dep.Tests/puppeteer/engine
+      run: |
+        echo "Clearing remote files for ${{ inputs.provider }} (after all chunks)"
+        node script/js/scripts/clearRun.js "${{ inputs.provider }}" "../${{ inputs.os_config }}" || true
