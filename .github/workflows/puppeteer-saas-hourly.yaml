@@ -201,7 +201,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.READ_PAT }}
 
       - name: Send Telegram notification
-        if: false
+        if: always()
         shell: bash
         run: |
           format_chunks() {
@@ -359,7 +359,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.READ_PAT }}
 
       - name: Send Telegram notification
-        if: false
+        if: always()
         shell: bash
         run: |
           format_chunks() {
