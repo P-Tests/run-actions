@@ -21,22 +21,6 @@ inputs:
   os_config:
     description: 'OS-specific config file name'
     required: true
-  url:
-    description: 'Test URL or environment name (release, hotfix, develop)'
-    required: false
-    default: ''
-  url_release:
-    description: 'Release environment URL'
-    required: false
-    default: ''
-  url_hotfix:
-    description: 'Hotfix environment URL'
-    required: false
-    default: ''
-  url_develop:
-    description: 'Develop environment URL'
-    required: false
-    default: ''
   project_name:
     description: 'Report Portal project name'
     required: true
@@ -44,6 +28,10 @@ inputs:
     description: 'Report Portal launch name (optional)'
     required: false
     default: ''
+  branch:
+    description: 'Dep.Tests branch to checkout'
+    required: false
+    default: 'master'
   read_pat:
     description: 'GitHub PAT for private repository access'
     required: true
@@ -54,6 +42,10 @@ inputs:
     description: 'Path to specific test file or dir (optional, runs full suite if empty)'
     required: false
     default: ''
+  clean:
+    description: 'Clear test files from the remote server during the run'
+    required: false
+    default: 'true'
 
 outputs:
   uuid:
@@ -72,7 +64,16 @@ runs:
         repository: ONLYOFFICE-data/Dep.Tests
         path: Dep.Tests
         token: ${{ inputs.read_pat }}
-        submodules: recursive
+        submodules: false
+        ref: ${{ inputs.branch }}
+        fetch-depth: 1
+
+    - name: Checkout puppeteer/files (pp-files submodule)
+      uses: actions/checkout@v4
+      with:
+        repository: ONLYOFFICE-data/pp-files
+        path: Dep.Tests/puppeteer/files
+        token: ${{ inputs.read_pat }}
         fetch-depth: 1
 
     - name: Set up Python
@@ -84,6 +85,8 @@ runs:
       uses: actions/setup-node@v4
       with:
         node-version: 'latest'
+        cache: 'npm'
+        cache-dependency-path: Dep.Tests/puppeteer/engine/package-lock.json
 
     - name: Install npm dependencies
       shell: bash
@@ -105,29 +108,6 @@ runs:
       run: |
         cd Dep.Tests/puppeteer/engine
         npx puppeteer browsers install chrome
-
-    - name: Configure test URL
-      if: inputs.url != ''
-      shell: bash
-      run: |
-        URL_INPUT="${{ inputs.url }}"
-
-        case "$URL_INPUT" in
-          release) URL="${{ inputs.url_release }}" ;;
-          hotfix) URL="${{ inputs.url_hotfix }}" ;;
-          develop) URL="${{ inputs.url_develop }}" ;;
-          *) URL="$URL_INPUT" ;;
-        esac
-
-        [[ "$URL" != */${{ inputs.provider }} ]] && URL="${URL%/}/${{ inputs.provider }}"
-
-        node -e "
-          const fs = require('fs');
-          const config = JSON.parse(fs.readFileSync('Dep.Tests/puppeteer/${{ inputs.os_config }}', 'utf8'));
-          config.testOptions.url = '$URL';
-          config.puppeteerOptions.headless = true;
-          fs.writeFileSync('Dep.Tests/puppeteer/${{ inputs.os_config }}', JSON.stringify(config, null, 2));
-        "
 
     - name: Configure Report Portal
       shell: bash
@@ -178,6 +158,7 @@ runs:
           --providers ${{ inputs.provider }} \
           --chunk-id ${{ inputs.chunk_id }} \
           --chunk-size ${{ inputs.chunk_size }} \
+          --branch "${{ inputs.branch }}" \
           --disable_animation \
           --config_params puppeteerOptions.headless=true \
           --connect_portal $SUITE_ARG 2>&1 | tee output.log
@@ -210,6 +191,14 @@ runs:
 
         exit $EXIT_CODE
 
+    - name: Clear remote test files
+      if: ${{ always() && inputs.clean == 'true' }}
+      shell: bash
+      working-directory: Dep.Tests/puppeteer/engine
+      run: |
+        echo "Clearing remote files for ${{ inputs.provider }} after chunk ${{ inputs.chunk_id }}"
+        node script/js/scripts/clearRun.js "${{ inputs.provider }}" "../${{ inputs.os_config }}" || true
+
     - name: Upload Launch UUID
       if: always()
       uses: actions/upload-artifact@v4
@@ -229,7 +218,7 @@ runs:
         if-no-files-found: warn
 
     - name: Upload test results
-      if: always()
+      if: failure()
       uses: actions/upload-artifact@v4
       with:
         name: results-${{ inputs.provider }}-${{ inputs.os_name }}-chunk-${{ inputs.chunk_id }}

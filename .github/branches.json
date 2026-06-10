@@ -1,0 +1,13 @@
+{
+  "_comment": "Dep.Tests branch bound to each provider (daily/hourly, static) and to each docserver stand (selected via the 'url' dropdown). Edit here to change which branch a provider/stand checks out.",
+  "providers": {
+    "docspaceEU": "doc-linux",
+    "docspaceUS": "doc-linux",
+    "ncoc": "master",
+    "ocis": "master"
+  },
+  "docserver": {
+    "kim": "master",
+    "doc-linux": "doc-linux"
+  }
+}

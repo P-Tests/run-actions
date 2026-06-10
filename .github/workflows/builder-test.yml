@@ -62,7 +62,7 @@ jobs:
           python check-docs.py
 
       - name: Send message to telegram
-        if: always()
+        if: false  # TG temporarily disabled
         shell: bash
         env:
           MESSAGE: |

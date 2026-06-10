@@ -52,6 +52,7 @@ runs:
         fi
 
     - name: Send message to Telegram
+      if: false  # TG temporarily disabled
       shell: bash
       run: |
         if [[ "${{ inputs.job_status }}" == "success" ]]; then

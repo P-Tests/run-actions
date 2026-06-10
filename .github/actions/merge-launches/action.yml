@@ -21,6 +21,10 @@ inputs:
     description: 'Name for the merged launch'
     required: false
     default: 'Github Action All Tests'
+  branch:
+    description: 'Dep.Tests branch to checkout'
+    required: false
+    default: 'master'
 
 outputs:
   rp_launch_url:
@@ -36,7 +40,8 @@ runs:
         repository: ONLYOFFICE-data/Dep.Tests
         path: Dep.Tests
         token: ${{ inputs.github-token }}
-        submodules: recursive
+        ref: ${{ inputs.branch }}
+        submodules: false
 
     - name: Set up Python
       uses: actions/setup-python@v5
