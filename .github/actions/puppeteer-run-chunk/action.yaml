@@ -21,22 +21,6 @@ inputs:
   os_config:
     description: 'OS-specific config file name'
     required: true
-  url:
-    description: 'Test URL or environment name (release, hotfix, develop)'
-    required: false
-    default: ''
-  url_release:
-    description: 'Release environment URL'
-    required: false
-    default: ''
-  url_hotfix:
-    description: 'Hotfix environment URL'
-    required: false
-    default: ''
-  url_develop:
-    description: 'Develop environment URL'
-    required: false
-    default: ''
   project_name:
     description: 'Report Portal project name'
     required: true
@@ -124,29 +108,6 @@ runs:
       run: |
         cd Dep.Tests/puppeteer/engine
         npx puppeteer browsers install chrome
-
-    - name: Configure test URL
-      if: inputs.url != ''
-      shell: bash
-      run: |
-        URL_INPUT="${{ inputs.url }}"
-
-        case "$URL_INPUT" in
-          release) URL="${{ inputs.url_release }}" ;;
-          hotfix) URL="${{ inputs.url_hotfix }}" ;;
-          develop) URL="${{ inputs.url_develop }}" ;;
-          *) URL="$URL_INPUT" ;;
-        esac
-
-        [[ "$URL" != */${{ inputs.provider }} ]] && URL="${URL%/}/${{ inputs.provider }}"
-
-        node -e "
-          const fs = require('fs');
-          const config = JSON.parse(fs.readFileSync('Dep.Tests/puppeteer/${{ inputs.os_config }}', 'utf8'));
-          config.testOptions.url = '$URL';
-          config.puppeteerOptions.headless = true;
-          fs.writeFileSync('Dep.Tests/puppeteer/${{ inputs.os_config }}', JSON.stringify(config, null, 2));
-        "
 
     - name: Configure Report Portal
       shell: bash

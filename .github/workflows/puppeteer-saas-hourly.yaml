@@ -6,8 +6,8 @@ on:
   workflow_dispatch:
     inputs:
       os:
-        description: 'Operating system'
-        required: false
+        description: 'Operating system to run on'
+        required: true
         default: 'all'
         type: choice
         options:
@@ -16,42 +16,56 @@ on:
           - linux
           - macos
       test_path:
-        description: 'Path to specific test file or dir (optional)'
+        description: 'Specific test file or directory'
         required: false
         default: ''
         type: string
       chunk_size:
-        description: 'Number of tests per chunk'
+        description: 'Tests per parallel chunk'
         required: false
         default: '100'
         type: string
-      branch:
-        description: 'Dep.Tests branch to checkout'
+      clean:
+        description: 'Clear test files from the remote server after all chunks'
         required: false
-        default: 'master'
-        type: string
-      api_key:
-        description: 'ReportPortal API key (overrides secret REPORT_KEY)'
-        required: false
-        default: ''
-        type: string
+        default: true
+        type: boolean
       project_name:
         description: 'ReportPortal project name'
         required: false
         default: 'docspace-saas'
         type: string
       launch_name:
-        description: 'ReportPortal launch name (optional; default per provider)'
+        description: 'ReportPortal launch name'
         required: false
         default: ''
         type: string
-      clean:
-        description: 'Clear test files from the remote server during the run'
+      api_key:
+        description: 'ReportPortal API key'
         required: false
-        default: true
-        type: boolean
+        default: ''
+        type: string
 
 jobs:
+  branch-config:
+    name: Resolve branches
+    runs-on: ubuntu-latest
+    outputs:
+      docspaceEU: ${{ steps.resolve.outputs.docspaceEU }}
+      docspaceUS: ${{ steps.resolve.outputs.docspaceUS }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Resolve Dep.Tests branches
+        id: resolve
+        shell: bash
+        run: |
+          for p in docspaceEU docspaceUS; do
+            V=$(jq -r --arg p "$p" '.providers[$p] // "master"' .github/branches.json)
+            echo "$p -> $V"
+            echo "$p=$V" >> "$GITHUB_OUTPUT"
+          done
+
   setup:
     runs-on: ubuntu-latest
     outputs:
@@ -71,10 +85,9 @@ jobs:
             echo 'matrix={"os":[{"name":"macos","runner":"macos-latest","config":"mac"}]}' >> $GITHUB_OUTPUT
           fi
 
-  # ── docspaceEU ─────────────────────────────────────────────────────────────
-
   prepare-docspaceEU:
     name: Prepare - DocSpace EU
+    needs: [branch-config]
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.prepare.outputs.matrix }}
@@ -90,13 +103,13 @@ jobs:
           provider: docspaceEU
           suite: ${{ inputs.test_path == '' && 'hourly' || '' }}
           chunk_size: ${{ inputs.chunk_size || '100' }}
-          branch: ${{ inputs.branch || 'master' }}
+          branch: ${{ needs.branch-config.outputs.docspaceEU }}
           read_pat: ${{ secrets.READ_PAT }}
           test_path: ${{ inputs.test_path }}
 
   run-docspaceEU:
     name: DocSpace EU - ${{ matrix.os.name }} - Chunk ${{ matrix.chunk }}
-    needs: [setup, prepare-docspaceEU]
+    needs: [setup, prepare-docspaceEU, branch-config]
     if: "!cancelled()"
     runs-on: ${{ matrix.os.runner }}
     strategy:
@@ -120,13 +133,13 @@ jobs:
           launch_name: "${{ inputs.launch_name || format('Hourly Tests - docspaceEU{0}', needs.prepare-docspaceEU.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
-          branch: ${{ inputs.branch || 'master' }}
+          branch: ${{ needs.branch-config.outputs.docspaceEU }}
           test_path: ${{ inputs.test_path }}
           clean: false
 
   post-docspaceEU:
     name: Post - DocSpace EU - ${{ matrix.os.name }}
-    needs: [setup, prepare-docspaceEU, run-docspaceEU]
+    needs: [setup, prepare-docspaceEU, run-docspaceEU, branch-config]
     if: "!cancelled()"
     runs-on: ubuntu-latest
     strategy:
@@ -155,7 +168,7 @@ jobs:
           api-key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           project-name: ${{ inputs.project_name || 'docspace-saas' }}
           github-token: ${{ secrets.READ_PAT }}
-          branch: ${{ inputs.branch || 'master' }}
+          branch: ${{ needs.branch-config.outputs.docspaceEU }}
           launch-name: Hourly Tests - docspaceEU
 
       - name: Download URL artifact (single chunk)
@@ -188,7 +201,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.READ_PAT }}
 
       - name: Send Telegram notification
-        if: false  # TG temporarily disabled
+        if: false
         shell: bash
         run: |
           format_chunks() {
@@ -230,10 +243,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.READ_PAT }}
 
-  # ── docspaceUS ─────────────────────────────────────────────────────────────
-
   prepare-docspaceUS:
     name: Prepare - DocSpace US
+    needs: [branch-config]
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.prepare.outputs.matrix }}
@@ -249,13 +261,13 @@ jobs:
           provider: docspaceUS
           suite: ${{ inputs.test_path == '' && 'hourly' || '' }}
           chunk_size: ${{ inputs.chunk_size || '100' }}
-          branch: ${{ inputs.branch || 'master' }}
+          branch: ${{ needs.branch-config.outputs.docspaceUS }}
           read_pat: ${{ secrets.READ_PAT }}
           test_path: ${{ inputs.test_path }}
 
   run-docspaceUS:
     name: DocSpace US - ${{ matrix.os.name }} - Chunk ${{ matrix.chunk }}
-    needs: [setup, prepare-docspaceUS]
+    needs: [setup, prepare-docspaceUS, branch-config]
     if: "!cancelled()"
     runs-on: ${{ matrix.os.runner }}
     strategy:
@@ -279,13 +291,13 @@ jobs:
           launch_name: "${{ inputs.launch_name || format('Hourly Tests - docspaceUS{0}', needs.prepare-docspaceUS.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
-          branch: ${{ inputs.branch || 'master' }}
+          branch: ${{ needs.branch-config.outputs.docspaceUS }}
           test_path: ${{ inputs.test_path }}
           clean: false
 
   post-docspaceUS:
     name: Post - DocSpace US - ${{ matrix.os.name }}
-    needs: [setup, prepare-docspaceUS, run-docspaceUS]
+    needs: [setup, prepare-docspaceUS, run-docspaceUS, branch-config]
     if: "!cancelled()"
     runs-on: ubuntu-latest
     strategy:
@@ -314,7 +326,7 @@ jobs:
           api-key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           project-name: ${{ inputs.project_name || 'docspace-saas' }}
           github-token: ${{ secrets.READ_PAT }}
-          branch: ${{ inputs.branch || 'master' }}
+          branch: ${{ needs.branch-config.outputs.docspaceUS }}
           launch-name: Hourly Tests - docspaceUS
 
       - name: Download URL artifact (single chunk)
@@ -347,7 +359,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.READ_PAT }}
 
       - name: Send Telegram notification
-        if: false  # TG temporarily disabled
+        if: false
         shell: bash
         run: |
           format_chunks() {
@@ -391,7 +403,7 @@ jobs:
 
   clean-docspaceEU:
     name: Clean - DocSpace EU
-    needs: [post-docspaceEU]
+    needs: [post-docspaceEU, branch-config]
     if: ${{ !cancelled() && inputs.clean }}
     runs-on: ubuntu-latest
     steps:
@@ -401,12 +413,12 @@ jobs:
         uses: ./.github/actions/puppeteer-clean
         with:
           provider: docspaceEU
-          branch: ${{ inputs.branch || 'master' }}
+          branch: ${{ needs.branch-config.outputs.docspaceEU }}
           read_pat: ${{ secrets.READ_PAT }}
 
   clean-docspaceUS:
     name: Clean - DocSpace US
-    needs: [post-docspaceUS]
+    needs: [post-docspaceUS, branch-config]
     if: ${{ !cancelled() && inputs.clean }}
     runs-on: ubuntu-latest
     steps:
@@ -416,5 +428,5 @@ jobs:
         uses: ./.github/actions/puppeteer-clean
         with:
           provider: docspaceUS
-          branch: ${{ inputs.branch || 'master' }}
+          branch: ${{ needs.branch-config.outputs.docspaceUS }}
           read_pat: ${{ secrets.READ_PAT }}

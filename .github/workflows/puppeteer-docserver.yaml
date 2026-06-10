@@ -5,17 +5,16 @@ on:
   workflow_dispatch:
     inputs:
       url:
-        description: Stand to test
+        description: 'Stand to test'
         required: true
-        default: release
+        default: kim
         type: choice
         options:
-        - release
-        - hotfix
-        - develop
+          - kim
+          - doc-linux
       os:
-        description: 'Operating system'
-        required: false
+        description: 'Operating system to run on'
+        required: true
         default: 'all'
         type: choice
         options:
@@ -24,48 +23,56 @@ on:
           - linux
           - macos
       test_path:
-        description: 'Path to specific test file or dir (optional)'
+        description: 'Specific test file or directory'
         required: false
         default: ''
         type: string
       chunk_size:
-        description: 'Number of tests per chunk'
+        description: 'Tests per parallel chunk'
         required: false
         default: '100'
         type: string
-      branch:
-        description: 'Dep.Tests branch to checkout'
+      clean:
+        description: 'Clear test files from the remote server after each chunk'
         required: false
-        default: 'master'
-        type: string
-      api_key:
-        description: 'ReportPortal API key (overrides secret REPORT_KEY)'
-        required: false
-        default: ''
-        type: string
+        default: true
+        type: boolean
       project_name:
         description: 'ReportPortal project name'
         required: false
         default: 'docsserver'
         type: string
       launch_name:
-        description: 'ReportPortal launch name (optional; default per run type)'
+        description: 'ReportPortal launch name'
         required: false
         default: ''
         type: string
-      clean:
-        description: 'Clear test files from the remote server during the run'
+      api_key:
+        description: 'ReportPortal API key'
         required: false
-        default: true
-        type: boolean
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.inputs.url }}
-  cancel-in-progress: true
+        default: ''
+        type: string
 
 jobs:
+  branch-config:
+    name: Resolve branch
+    runs-on: ubuntu-latest
+    outputs:
+      branch: ${{ steps.resolve.outputs.branch }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Resolve Dep.Tests branch for stand
+        id: resolve
+        shell: bash
+        run: |
+          BRANCH=$(jq -r --arg s "${{ inputs.url }}" '.docserver[$s] // "master"' .github/branches.json)
+          echo "Stand '${{ inputs.url }}' -> Dep.Tests branch '$BRANCH'"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+
   prepare:
     name: Prepare Test Matrix
+    needs: [branch-config]
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.prepare.outputs.matrix }}
@@ -82,13 +89,13 @@ jobs:
         with:
           provider: example
           chunk_size: ${{ github.event.inputs.chunk_size }}
-          branch: ${{ inputs.branch || 'master' }}
+          branch: ${{ needs.branch-config.outputs.branch }}
           read_pat: ${{ secrets.READ_PAT }}
           test_path: ${{ inputs.test_path }}
 
   run-tests-windows:
     name: Windows - Chunk ${{ matrix.chunk }}
-    needs: [prepare]
+    needs: [prepare, branch-config]
     if: "!cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows')"
     runs-on: windows-latest
     strategy:
@@ -108,14 +115,10 @@ jobs:
           chunk_size: ${{ needs.prepare.outputs.chunk_size }}
           os_name: windows
           os_config: config_chrome_win.json
-          url: ${{ github.event.inputs.url }}
-          url_release: ${{ secrets.URL_RELEASE }}
-          url_hotfix: ${{ secrets.URL_HOTFIX }}
-          url_develop: ${{ secrets.URL_DEVELOP }}
           project_name: ${{ inputs.project_name || 'docsserver' }}
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
-          branch: ${{ inputs.branch || 'master' }}
+          branch: ${{ needs.branch-config.outputs.branch }}
           test_path: ${{ inputs.test_path }}
           clean: ${{ inputs.clean }}
           launch_name: "${{ inputs.launch_name || format('{0}{1}', inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests', needs.prepare.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
@@ -141,7 +144,7 @@ jobs:
 
   merge-launches-windows:
     name: Merge Windows Launches
-    needs: [prepare, collect-uuids-windows]
+    needs: [prepare, branch-config, collect-uuids-windows]
     runs-on: ubuntu-latest
     if: "!cancelled() && needs.prepare.outputs.num_chunks > 1 && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows')"
     outputs:
@@ -160,12 +163,12 @@ jobs:
           api-key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           project-name: ${{ inputs.project_name || 'docsserver' }}
           github-token: ${{ secrets.READ_PAT }}
-          branch: ${{ inputs.branch || 'master' }}
+          branch: ${{ needs.branch-config.outputs.branch }}
           launch-name: ${{ inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests' }}
 
   run-tests-linux:
     name: Linux - Chunk ${{ matrix.chunk }}
-    needs: [prepare]
+    needs: [prepare, branch-config]
     if: "!cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux')"
     runs-on: ubuntu-latest
     strategy:
@@ -185,14 +188,10 @@ jobs:
           chunk_size: ${{ needs.prepare.outputs.chunk_size }}
           os_name: linux
           os_config: config_chrome_linux.json
-          url: ${{ github.event.inputs.url }}
-          url_release: ${{ secrets.URL_RELEASE }}
-          url_hotfix: ${{ secrets.URL_HOTFIX }}
-          url_develop: ${{ secrets.URL_DEVELOP }}
           project_name: ${{ inputs.project_name || 'docsserver' }}
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
-          branch: ${{ inputs.branch || 'master' }}
+          branch: ${{ needs.branch-config.outputs.branch }}
           test_path: ${{ inputs.test_path }}
           clean: ${{ inputs.clean }}
           launch_name: "${{ inputs.launch_name || format('{0}{1}', inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests', needs.prepare.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
@@ -218,7 +217,7 @@ jobs:
 
   merge-launches-linux:
     name: Merge Linux Launches
-    needs: [prepare, collect-uuids-linux]
+    needs: [prepare, branch-config, collect-uuids-linux]
     runs-on: ubuntu-latest
     if: "!cancelled() && needs.prepare.outputs.num_chunks > 1 && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux')"
     outputs:
@@ -237,12 +236,12 @@ jobs:
           api-key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           project-name: ${{ inputs.project_name || 'docsserver' }}
           github-token: ${{ secrets.READ_PAT }}
-          branch: ${{ inputs.branch || 'master' }}
+          branch: ${{ needs.branch-config.outputs.branch }}
           launch-name: ${{ inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests' }}
 
   run-tests-macos:
     name: macOS - Chunk ${{ matrix.chunk }}
-    needs: [prepare]
+    needs: [prepare, branch-config]
     if: "!cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos')"
     runs-on: macos-latest
     strategy:
@@ -262,14 +261,10 @@ jobs:
           chunk_size: ${{ needs.prepare.outputs.chunk_size }}
           os_name: macos
           os_config: config_chrome_mac.json
-          url: ${{ github.event.inputs.url }}
-          url_release: ${{ secrets.URL_RELEASE }}
-          url_hotfix: ${{ secrets.URL_HOTFIX }}
-          url_develop: ${{ secrets.URL_DEVELOP }}
           project_name: ${{ inputs.project_name || 'docsserver' }}
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
-          branch: ${{ inputs.branch || 'master' }}
+          branch: ${{ needs.branch-config.outputs.branch }}
           test_path: ${{ inputs.test_path }}
           clean: ${{ inputs.clean }}
           launch_name: "${{ inputs.launch_name || format('{0}{1}', inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests', needs.prepare.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
@@ -295,7 +290,7 @@ jobs:
 
   merge-launches-macos:
     name: Merge macOS Launches
-    needs: [prepare, collect-uuids-macos]
+    needs: [prepare, branch-config, collect-uuids-macos]
     runs-on: ubuntu-latest
     if: "!cancelled() && needs.prepare.outputs.num_chunks > 1 && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos')"
     outputs:
@@ -314,12 +309,12 @@ jobs:
           api-key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           project-name: ${{ inputs.project_name || 'docsserver' }}
           github-token: ${{ secrets.READ_PAT }}
-          branch: ${{ inputs.branch || 'master' }}
+          branch: ${{ needs.branch-config.outputs.branch }}
           launch-name: ${{ inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests' }}
 
   final-summary-windows:
     name: Windows Test Summary
-    needs: [prepare, merge-launches-windows]
+    needs: [prepare, branch-config, merge-launches-windows]
     runs-on: ubuntu-latest
     if: "!cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows')"
 
@@ -360,7 +355,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.READ_PAT }}
 
       - name: Send comprehensive Telegram notification
-        if: false  # TG temporarily disabled
+        if: false
         shell: bash
         run: |
           format_chunks() {
@@ -401,7 +396,7 @@ jobs:
           MESSAGE="${MESSAGE}\n*Provider:* example"
           MESSAGE="${MESSAGE}\n*Platform:* windows"
           MESSAGE="${MESSAGE}\n*Browser:* chrome"
-          MESSAGE="${MESSAGE}\n*Branch:* ${{ inputs.branch || 'master' }}"
+          MESSAGE="${MESSAGE}\n*Branch:* ${{ needs.branch-config.outputs.branch }}"
           MESSAGE="${MESSAGE}\n*Stand:* ${{ github.event.inputs.url }}"
           MESSAGE="${MESSAGE}\n*Status:* ${OVERALL_STATUS}"
           MESSAGE="${MESSAGE}\n*Chunk Jobs:*"
@@ -432,7 +427,7 @@ jobs:
 
   final-summary-linux:
     name: Linux Test Summary
-    needs: [prepare, merge-launches-linux]
+    needs: [prepare, branch-config, merge-launches-linux]
     runs-on: ubuntu-latest
     if: "!cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux')"
 
@@ -473,7 +468,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.READ_PAT }}
 
       - name: Send comprehensive Telegram notification
-        if: false  # TG temporarily disabled
+        if: false
         shell: bash
         run: |
           format_chunks() {
@@ -514,7 +509,7 @@ jobs:
           MESSAGE="${MESSAGE}\n*Provider:* example"
           MESSAGE="${MESSAGE}\n*Platform:* linux"
           MESSAGE="${MESSAGE}\n*Browser:* chrome"
-          MESSAGE="${MESSAGE}\n*Branch:* ${{ inputs.branch || 'master' }}"
+          MESSAGE="${MESSAGE}\n*Branch:* ${{ needs.branch-config.outputs.branch }}"
           MESSAGE="${MESSAGE}\n*Stand:* ${{ github.event.inputs.url }}"
           MESSAGE="${MESSAGE}\n*Status:* ${OVERALL_STATUS}"
           MESSAGE="${MESSAGE}\n*Chunk Jobs:*"
@@ -545,7 +540,7 @@ jobs:
 
   final-summary-macos:
     name: macOS Test Summary
-    needs: [prepare, merge-launches-macos]
+    needs: [prepare, branch-config, merge-launches-macos]
     runs-on: ubuntu-latest
     if: "!cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos')"
 
@@ -586,7 +581,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.READ_PAT }}
 
       - name: Send comprehensive Telegram notification
-        if: false  # TG temporarily disabled
+        if: false
         shell: bash
         run: |
           format_chunks() {
@@ -627,7 +622,7 @@ jobs:
           MESSAGE="${MESSAGE}\n*Provider:* example"
           MESSAGE="${MESSAGE}\n*Platform:* macos"
           MESSAGE="${MESSAGE}\n*Browser:* chrome"
-          MESSAGE="${MESSAGE}\n*Branch:* ${{ inputs.branch || 'master' }}"
+          MESSAGE="${MESSAGE}\n*Branch:* ${{ needs.branch-config.outputs.branch }}"
           MESSAGE="${MESSAGE}\n*Stand:* ${{ github.event.inputs.url }}"
           MESSAGE="${MESSAGE}\n*Status:* ${OVERALL_STATUS}"
           MESSAGE="${MESSAGE}\n*Chunk Jobs:*"

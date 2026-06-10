@@ -74,4 +74,4 @@ runs:
       working-directory: Dep.Tests/puppeteer/engine
       run: |
         echo "Clearing remote files for ${{ inputs.provider }} (after all chunks)"
-        node script/js/scripts/clearRun.js "${{ inputs.provider }}" "../${{ inputs.os_config }}" || true
+        node script/js/scripts/clearRun.js "${{ inputs.provider }}" "../${{ inputs.os_config }}"

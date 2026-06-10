@@ -6,8 +6,8 @@ on:
   workflow_dispatch:
     inputs:
       os:
-        description: 'Operating system'
-        required: false
+        description: 'Operating system to run on'
+        required: true
         default: 'all'
         type: choice
         options:
@@ -16,42 +16,58 @@ on:
           - linux
           - macos
       test_path:
-        description: 'Path to specific test file or dir (optional)'
+        description: 'Specific test file or directory'
         required: false
         default: ''
         type: string
       chunk_size:
-        description: 'Number of tests per chunk'
+        description: 'Tests per parallel chunk'
         required: false
         default: '100'
         type: string
-      branch:
-        description: 'Dep.Tests branch to checkout'
+      clean:
+        description: 'Clear test files from the remote server after all chunks'
         required: false
-        default: 'master'
-        type: string
-      api_key:
-        description: 'ReportPortal API key (overrides secret REPORT_KEY)'
+        default: true
+        type: boolean
+      project_name:
+        description: 'ReportPortal project name'
         required: false
-        default: ''
+        default: 'docsserver-daily'
         type: string
       launch_name:
         description: 'ReportPortal launch name'
         required: false
         default: ''
         type: string
-      project_name:
-        description: 'ReportPortal project name'
+      api_key:
+        description: 'ReportPortal API key'
         required: false
-        default: 'docsserver-daily'
+        default: ''
         type: string
-      clean:
-        description: 'Clear test files from the remote server during the run'
-        required: false
-        default: true
-        type: boolean
 
 jobs:
+  branch-config:
+    name: Resolve branches
+    runs-on: ubuntu-latest
+    outputs:
+      docspaceEU: ${{ steps.resolve.outputs.docspaceEU }}
+      docspaceUS: ${{ steps.resolve.outputs.docspaceUS }}
+      ncoc: ${{ steps.resolve.outputs.ncoc }}
+      ocis: ${{ steps.resolve.outputs.ocis }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Resolve Dep.Tests branches
+        id: resolve
+        shell: bash
+        run: |
+          for p in docspaceEU docspaceUS ncoc ocis; do
+            V=$(jq -r --arg p "$p" '.providers[$p] // "master"' .github/branches.json)
+            echo "$p -> $V"
+            echo "$p=$V" >> "$GITHUB_OUTPUT"
+          done
+
   setup:
     runs-on: ubuntu-latest
     outputs:
@@ -71,10 +87,9 @@ jobs:
             echo 'matrix={"os":[{"name":"macos","runner":"macos-latest","config":"mac"}]}' >> $GITHUB_OUTPUT
           fi
 
-  # ── docspaceEU ─────────────────────────────────────────────────────────────
-
   prepare-docspaceEU:
     name: Prepare - DocSpace EU
+    needs: [branch-config]
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.prepare.outputs.matrix }}
@@ -90,13 +105,13 @@ jobs:
           provider: docspaceEU
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
           chunk_size: ${{ inputs.chunk_size || '100' }}
-          branch: ${{ inputs.branch || 'master' }}
+          branch: ${{ needs.branch-config.outputs.docspaceEU }}
           read_pat: ${{ secrets.READ_PAT }}
           test_path: ${{ inputs.test_path }}
 
   run-docspaceEU:
     name: DocSpace EU - ${{ matrix.os.name }} - Chunk ${{ matrix.chunk }}
-    needs: [setup, prepare-docspaceEU]
+    needs: [setup, prepare-docspaceEU, branch-config]
     if: "!cancelled()"
     runs-on: ${{ matrix.os.runner }}
     strategy:
@@ -119,14 +134,14 @@ jobs:
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
           launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-docspaceEU.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
-          branch: ${{ inputs.branch || 'master' }}
+          branch: ${{ needs.branch-config.outputs.docspaceEU }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           test_path: ${{ inputs.test_path }}
           clean: false
 
   post-docspaceEU:
     name: Post - DocSpace EU - ${{ matrix.os.name }}
-    needs: [setup, prepare-docspaceEU, run-docspaceEU]
+    needs: [setup, prepare-docspaceEU, run-docspaceEU, branch-config]
     if: "!cancelled()"
     runs-on: ubuntu-latest
     strategy:
@@ -155,7 +170,7 @@ jobs:
           api-key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           project-name: ${{ inputs.project_name || 'docsserver-daily' }}
           github-token: ${{ secrets.READ_PAT }}
-          branch: ${{ inputs.branch || 'master' }}
+          branch: ${{ needs.branch-config.outputs.docspaceEU }}
           launch-name: Daily Tests
 
       - name: Download URL artifact (single chunk)
@@ -188,7 +203,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.READ_PAT }}
 
       - name: Send Telegram notification
-        if: false  # TG temporarily disabled
+        if: false
         shell: bash
         run: |
           format_chunks() {
@@ -230,10 +245,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.READ_PAT }}
 
-  # ── docspaceUS ─────────────────────────────────────────────────────────────
-
   prepare-docspaceUS:
     name: Prepare - DocSpace US
+    needs: [branch-config]
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.prepare.outputs.matrix }}
@@ -249,13 +263,13 @@ jobs:
           provider: docspaceUS
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
           chunk_size: ${{ inputs.chunk_size || '100' }}
-          branch: ${{ inputs.branch || 'master' }}
+          branch: ${{ needs.branch-config.outputs.docspaceUS }}
           read_pat: ${{ secrets.READ_PAT }}
           test_path: ${{ inputs.test_path }}
 
   run-docspaceUS:
     name: DocSpace US - ${{ matrix.os.name }} - Chunk ${{ matrix.chunk }}
-    needs: [setup, prepare-docspaceUS]
+    needs: [setup, prepare-docspaceUS, branch-config]
     if: "!cancelled()"
     runs-on: ${{ matrix.os.runner }}
     strategy:
@@ -278,14 +292,14 @@ jobs:
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
           launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-docspaceUS.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
-          branch: ${{ inputs.branch || 'master' }}
+          branch: ${{ needs.branch-config.outputs.docspaceUS }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           test_path: ${{ inputs.test_path }}
           clean: false
 
   post-docspaceUS:
     name: Post - DocSpace US - ${{ matrix.os.name }}
-    needs: [setup, prepare-docspaceUS, run-docspaceUS]
+    needs: [setup, prepare-docspaceUS, run-docspaceUS, branch-config]
     if: "!cancelled()"
     runs-on: ubuntu-latest
     strategy:
@@ -314,7 +328,7 @@ jobs:
           api-key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           project-name: ${{ inputs.project_name || 'docsserver-daily' }}
           github-token: ${{ secrets.READ_PAT }}
-          branch: ${{ inputs.branch || 'master' }}
+          branch: ${{ needs.branch-config.outputs.docspaceUS }}
           launch-name: Daily Tests
 
       - name: Download URL artifact (single chunk)
@@ -347,7 +361,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.READ_PAT }}
 
       - name: Send Telegram notification
-        if: false  # TG temporarily disabled
+        if: false
         shell: bash
         run: |
           format_chunks() {
@@ -389,10 +403,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.READ_PAT }}
 
-  # ── ncoc ───────────────────────────────────────────────────────────────────
-
   prepare-ncoc:
     name: Prepare - NCOC
+    needs: [branch-config]
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.prepare.outputs.matrix }}
@@ -408,13 +421,13 @@ jobs:
           provider: ncoc
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
           chunk_size: ${{ inputs.chunk_size || '100' }}
-          branch: ${{ inputs.branch || 'master' }}
+          branch: ${{ needs.branch-config.outputs.ncoc }}
           read_pat: ${{ secrets.READ_PAT }}
           test_path: ${{ inputs.test_path }}
 
   run-ncoc:
     name: NCOC - ${{ matrix.os.name }} - Chunk ${{ matrix.chunk }}
-    needs: [setup, prepare-ncoc]
+    needs: [setup, prepare-ncoc, branch-config]
     if: "!cancelled()"
     runs-on: ${{ matrix.os.runner }}
     strategy:
@@ -437,14 +450,14 @@ jobs:
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
           launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-ncoc.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
-          branch: ${{ inputs.branch || 'master' }}
+          branch: ${{ needs.branch-config.outputs.ncoc }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           test_path: ${{ inputs.test_path }}
           clean: false
 
   post-ncoc:
     name: Post - NCOC - ${{ matrix.os.name }}
-    needs: [setup, prepare-ncoc, run-ncoc]
+    needs: [setup, prepare-ncoc, run-ncoc, branch-config]
     if: "!cancelled()"
     runs-on: ubuntu-latest
     strategy:
@@ -473,7 +486,7 @@ jobs:
           api-key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           project-name: ${{ inputs.project_name || 'docsserver-daily' }}
           github-token: ${{ secrets.READ_PAT }}
-          branch: ${{ inputs.branch || 'master' }}
+          branch: ${{ needs.branch-config.outputs.ncoc }}
           launch-name: Daily Tests
 
       - name: Download URL artifact (single chunk)
@@ -506,7 +519,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.READ_PAT }}
 
       - name: Send Telegram notification
-        if: false  # TG temporarily disabled
+        if: false
         shell: bash
         run: |
           format_chunks() {
@@ -548,10 +561,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.READ_PAT }}
 
-  # ── ocis ───────────────────────────────────────────────────────────────────
-
   prepare-ocis:
     name: Prepare - OCIS
+    needs: [branch-config]
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.prepare.outputs.matrix }}
@@ -567,13 +579,13 @@ jobs:
           provider: ocis
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
           chunk_size: ${{ inputs.chunk_size || '100' }}
-          branch: ${{ inputs.branch || 'master' }}
+          branch: ${{ needs.branch-config.outputs.ocis }}
           read_pat: ${{ secrets.READ_PAT }}
           test_path: ${{ inputs.test_path }}
 
   run-ocis:
     name: OCIS - ${{ matrix.os.name }} - Chunk ${{ matrix.chunk }}
-    needs: [setup, prepare-ocis]
+    needs: [setup, prepare-ocis, branch-config]
     if: "!cancelled()"
     runs-on: ${{ matrix.os.runner }}
     strategy:
@@ -596,14 +608,14 @@ jobs:
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
           launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-ocis.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
-          branch: ${{ inputs.branch || 'master' }}
+          branch: ${{ needs.branch-config.outputs.ocis }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           test_path: ${{ inputs.test_path }}
           clean: false
 
   post-ocis:
     name: Post - OCIS - ${{ matrix.os.name }}
-    needs: [setup, prepare-ocis, run-ocis]
+    needs: [setup, prepare-ocis, run-ocis, branch-config]
     if: "!cancelled()"
     runs-on: ubuntu-latest
     strategy:
@@ -632,7 +644,7 @@ jobs:
           api-key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           project-name: ${{ inputs.project_name || 'docsserver-daily' }}
           github-token: ${{ secrets.READ_PAT }}
-          branch: ${{ inputs.branch || 'master' }}
+          branch: ${{ needs.branch-config.outputs.ocis }}
           launch-name: Daily Tests
 
       - name: Download URL artifact (single chunk)
@@ -665,7 +677,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.READ_PAT }}
 
       - name: Send Telegram notification
-        if: false  # TG temporarily disabled
+        if: false
         shell: bash
         run: |
           format_chunks() {
@@ -709,7 +721,7 @@ jobs:
 
   clean-docspaceEU:
     name: Clean - DocSpace EU
-    needs: [post-docspaceEU]
+    needs: [post-docspaceEU, branch-config]
     if: ${{ !cancelled() && inputs.clean }}
     runs-on: ubuntu-latest
     steps:
@@ -719,12 +731,12 @@ jobs:
         uses: ./.github/actions/puppeteer-clean
         with:
           provider: docspaceEU
-          branch: ${{ inputs.branch || 'master' }}
+          branch: ${{ needs.branch-config.outputs.docspaceEU }}
           read_pat: ${{ secrets.READ_PAT }}
 
   clean-docspaceUS:
     name: Clean - DocSpace US
-    needs: [post-docspaceUS]
+    needs: [post-docspaceUS, branch-config]
     if: ${{ !cancelled() && inputs.clean }}
     runs-on: ubuntu-latest
     steps:
@@ -734,12 +746,12 @@ jobs:
         uses: ./.github/actions/puppeteer-clean
         with:
           provider: docspaceUS
-          branch: ${{ inputs.branch || 'master' }}
+          branch: ${{ needs.branch-config.outputs.docspaceUS }}
           read_pat: ${{ secrets.READ_PAT }}
 
   clean-ncoc:
     name: Clean - NCOC
-    needs: [post-ncoc]
+    needs: [post-ncoc, branch-config]
     if: ${{ !cancelled() && inputs.clean }}
     runs-on: ubuntu-latest
     steps:
@@ -749,12 +761,12 @@ jobs:
         uses: ./.github/actions/puppeteer-clean
         with:
           provider: ncoc
-          branch: ${{ inputs.branch || 'master' }}
+          branch: ${{ needs.branch-config.outputs.ncoc }}
           read_pat: ${{ secrets.READ_PAT }}
 
   clean-ocis:
     name: Clean - OCIS
-    needs: [post-ocis]
+    needs: [post-ocis, branch-config]
     if: ${{ !cancelled() && inputs.clean }}
     runs-on: ubuntu-latest
     steps:
@@ -764,5 +776,5 @@ jobs:
         uses: ./.github/actions/puppeteer-clean
         with:
           provider: ocis
-          branch: ${{ inputs.branch || 'master' }}
+          branch: ${{ needs.branch-config.outputs.ocis }}
           read_pat: ${{ secrets.READ_PAT }}
