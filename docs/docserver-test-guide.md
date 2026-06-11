@@ -26,9 +26,8 @@ is taken from a repository secret:
 | `kim`       | release    | `URL_RELEASE`  |
 | `doc-linux` | hotfix     | `URL_HOTFIX`   |
 
-The selected URL is written into the OS config (`testOptions.url` in
-`config_chrome_*.json`) before the run, so both the tests and the cleanup target that
-server.
+The selected URL is written into the OS config (`testOptions.url` in `config_chrome_*.json`)
+before the run, so both the tests and the cleanup target that server.
 
 The stand also sets the **default** `Dep.Tests` branch (used only when the **branch** field
 is empty), via `.github/branches.json`:
