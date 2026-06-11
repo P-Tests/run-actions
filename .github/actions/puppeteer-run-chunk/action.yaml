@@ -46,6 +46,10 @@ inputs:
     description: 'Clear test files from the remote server during the run'
     required: false
     default: 'true'
+  url:
+    description: 'Server URL to test against (optional; overrides testOptions.url in the OS config when set)'
+    required: false
+    default: ''
 
 outputs:
   uuid:
@@ -125,6 +129,23 @@ runs:
           config.project_name = '${{ inputs.project_name }}';
           config.launch_name = '$LAUNCH_NAME';
           fs.writeFileSync('Dep.Tests/tools/report_portal/config.json', JSON.stringify(config, null, 2));
+        "
+
+    - name: Configure test server URL
+      if: ${{ inputs.url != '' }}
+      shell: bash
+      working-directory: Dep.Tests/puppeteer
+      env:
+        SERVER_URL: ${{ inputs.url }}
+      run: |
+        node -e "
+          const fs = require('fs');
+          const file = '${{ inputs.os_config }}';
+          const config = JSON.parse(fs.readFileSync(file, 'utf8'));
+          config.testOptions = config.testOptions || {};
+          config.testOptions.url = process.env.SERVER_URL + '/example';
+          fs.writeFileSync(file, JSON.stringify(config, null, 2));
+          console.log('Updated testOptions.url in ' + file);
         "
 
     - name: Configure Chrome sandbox (Linux only)
