@@ -143,7 +143,7 @@ runs:
           const file = '${{ inputs.os_config }}';
           const config = JSON.parse(fs.readFileSync(file, 'utf8'));
           config.testOptions = config.testOptions || {};
-          config.testOptions.url = process.env.SERVER_URL + '/example';
+          config.testOptions.url = process.env.SERVER_URL + 'example';
           fs.writeFileSync(file, JSON.stringify(config, null, 2));
           console.log('Updated testOptions.url in ' + file);
         "
