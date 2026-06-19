@@ -180,6 +180,7 @@ runs:
           --chunk-id ${{ inputs.chunk_id }} \
           --chunk-size ${{ inputs.chunk_size }} \
           --branch "${{ inputs.branch }}" \
+          --rerun-failed \
           --disable_animation \
           --config_params puppeteerOptions.headless=true \
           --connect_portal $SUITE_ARG 2>&1 | tee output.log
