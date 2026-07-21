@@ -204,20 +204,6 @@ jobs:
         if: always()
         shell: bash
         run: |
-          format_chunks() {
-            local chunks_json="$1"
-            if [[ "$chunks_json" == "[]" || -z "$chunks_json" ]]; then
-              echo "  No chunks found"
-              return
-            fi
-            echo "$chunks_json" | jq -r 'sort_by(.name) | .[] |
-              if .conclusion == "success" then "  \u2705 "
-              elif .conclusion == "failure" then "  \u274C "
-              elif .conclusion == "cancelled" then "  \u26D4 "
-              else "  \u2753 " end +
-              "[" + .name + "](" + .url + ")"'
-          }
-          CHUNKS_OUTPUT=$(format_chunks '${{ steps.collect-chunks.outputs.chunks }}')
           FAILED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "failure")] | length')
           CANCELLED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "cancelled")] | length')
           SUCCESS_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "success")] | length')
@@ -238,8 +224,6 @@ jobs:
             OVERALL_STATUS="\u2753 Chunks status unknown"
           fi
           MESSAGE="\n*Workflow:* ${{ github.workflow }}\n*Provider:* docspaceEU\n*OS:* ${{ matrix.os.name }}\n*Status:* ${OVERALL_STATUS}"
-          MESSAGE="${MESSAGE}\n*Chunk Jobs:*"
-          MESSAGE="${MESSAGE}\n${CHUNKS_OUTPUT}"
           MESSAGE="${MESSAGE}\n[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
           if [[ -n "${{ steps.get-rp-url.outputs.rp_url }}" ]]; then MESSAGE="${MESSAGE}\n[View Report Portal](${{ steps.get-rp-url.outputs.rp_url }})"; fi
           MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')
@@ -368,20 +352,6 @@ jobs:
         if: always()
         shell: bash
         run: |
-          format_chunks() {
-            local chunks_json="$1"
-            if [[ "$chunks_json" == "[]" || -z "$chunks_json" ]]; then
-              echo "  No chunks found"
-              return
-            fi
-            echo "$chunks_json" | jq -r 'sort_by(.name) | .[] |
-              if .conclusion == "success" then "  \u2705 "
-              elif .conclusion == "failure" then "  \u274C "
-              elif .conclusion == "cancelled" then "  \u26D4 "
-              else "  \u2753 " end +
-              "[" + .name + "](" + .url + ")"'
-          }
-          CHUNKS_OUTPUT=$(format_chunks '${{ steps.collect-chunks.outputs.chunks }}')
           FAILED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "failure")] | length')
           CANCELLED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "cancelled")] | length')
           SUCCESS_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "success")] | length')
@@ -402,8 +372,6 @@ jobs:
             OVERALL_STATUS="\u2753 Chunks status unknown"
           fi
           MESSAGE="\n*Workflow:* ${{ github.workflow }}\n*Provider:* docspaceUS\n*OS:* ${{ matrix.os.name }}\n*Status:* ${OVERALL_STATUS}"
-          MESSAGE="${MESSAGE}\n*Chunk Jobs:*"
-          MESSAGE="${MESSAGE}\n${CHUNKS_OUTPUT}"
           MESSAGE="${MESSAGE}\n[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
           if [[ -n "${{ steps.get-rp-url.outputs.rp_url }}" ]]; then MESSAGE="${MESSAGE}\n[View Report Portal](${{ steps.get-rp-url.outputs.rp_url }})"; fi
           MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')

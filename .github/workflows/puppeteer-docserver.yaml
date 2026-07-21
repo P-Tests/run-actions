@@ -371,25 +371,6 @@ jobs:
         if: always()
         shell: bash
         run: |
-          format_chunks() {
-            local chunks_json="$1"
-
-            if [[ "$chunks_json" == "[]" || -z "$chunks_json" ]]; then
-              echo "  No chunks found"
-              return
-            fi
-
-            echo "$chunks_json" | jq -r 'sort_by(.name | sub(".*Chunk ";"") | tonumber) | .[] |
-              if .conclusion == "success" then "  ✅ "
-              elif .conclusion == "failure" then "  ❌ "
-              elif .conclusion == "cancelled" then "  🚫 "
-              elif .conclusion == "skipped" then "  ⏭️ "
-              else "  ❓ " end +
-              "[" + .name + "](" + .url + ")"'
-          }
-
-          CHUNKS_OUTPUT=$(format_chunks '${{ steps.collect-chunks.outputs.chunks }}')
-
           FAILED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "failure")] | length')
           CANCELLED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "cancelled")] | length')
           SUCCESS_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "success")] | length')
@@ -418,8 +399,6 @@ jobs:
           MESSAGE="${MESSAGE}\n*Branch:* ${{ needs.branch-config.outputs.branch }}"
           MESSAGE="${MESSAGE}\n*Stand:* ${{ github.event.inputs.url }}"
           MESSAGE="${MESSAGE}\n*Status:* ${OVERALL_STATUS}"
-          MESSAGE="${MESSAGE}\n*Chunk Jobs:*"
-          MESSAGE="${MESSAGE}\n${CHUNKS_OUTPUT}"
           MESSAGE="${MESSAGE}\n"
 
           if [[ "${{ needs.prepare.outputs.num_chunks }}" -gt 1 ]]; then
@@ -490,25 +469,6 @@ jobs:
         if: always()
         shell: bash
         run: |
-          format_chunks() {
-            local chunks_json="$1"
-
-            if [[ "$chunks_json" == "[]" || -z "$chunks_json" ]]; then
-              echo "  No chunks found"
-              return
-            fi
-
-            echo "$chunks_json" | jq -r 'sort_by(.name | sub(".*Chunk ";"") | tonumber) | .[] |
-              if .conclusion == "success" then "  ✅ "
-              elif .conclusion == "failure" then "  ❌ "
-              elif .conclusion == "cancelled" then "  🚫 "
-              elif .conclusion == "skipped" then "  ⏭️ "
-              else "  ❓ " end +
-              "[" + .name + "](" + .url + ")"'
-          }
-
-          CHUNKS_OUTPUT=$(format_chunks '${{ steps.collect-chunks.outputs.chunks }}')
-
           FAILED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "failure")] | length')
           CANCELLED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "cancelled")] | length')
           SUCCESS_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "success")] | length')
@@ -537,8 +497,6 @@ jobs:
           MESSAGE="${MESSAGE}\n*Branch:* ${{ needs.branch-config.outputs.branch }}"
           MESSAGE="${MESSAGE}\n*Stand:* ${{ github.event.inputs.url }}"
           MESSAGE="${MESSAGE}\n*Status:* ${OVERALL_STATUS}"
-          MESSAGE="${MESSAGE}\n*Chunk Jobs:*"
-          MESSAGE="${MESSAGE}\n${CHUNKS_OUTPUT}"
           MESSAGE="${MESSAGE}\n"
 
           if [[ "${{ needs.prepare.outputs.num_chunks }}" -gt 1 ]]; then
@@ -609,25 +567,6 @@ jobs:
         if: always()
         shell: bash
         run: |
-          format_chunks() {
-            local chunks_json="$1"
-
-            if [[ "$chunks_json" == "[]" || -z "$chunks_json" ]]; then
-              echo "  No chunks found"
-              return
-            fi
-
-            echo "$chunks_json" | jq -r 'sort_by(.name | sub(".*Chunk ";"") | tonumber) | .[] |
-              if .conclusion == "success" then "  ✅ "
-              elif .conclusion == "failure" then "  ❌ "
-              elif .conclusion == "cancelled" then "  🚫 "
-              elif .conclusion == "skipped" then "  ⏭️ "
-              else "  ❓ " end +
-              "[" + .name + "](" + .url + ")"'
-          }
-
-          CHUNKS_OUTPUT=$(format_chunks '${{ steps.collect-chunks.outputs.chunks }}')
-
           FAILED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "failure")] | length')
           CANCELLED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "cancelled")] | length')
           SUCCESS_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "success")] | length')
@@ -656,8 +595,6 @@ jobs:
           MESSAGE="${MESSAGE}\n*Branch:* ${{ needs.branch-config.outputs.branch }}"
           MESSAGE="${MESSAGE}\n*Stand:* ${{ github.event.inputs.url }}"
           MESSAGE="${MESSAGE}\n*Status:* ${OVERALL_STATUS}"
-          MESSAGE="${MESSAGE}\n*Chunk Jobs:*"
-          MESSAGE="${MESSAGE}\n${CHUNKS_OUTPUT}"
           MESSAGE="${MESSAGE}\n"
 
           if [[ "${{ needs.prepare.outputs.num_chunks }}" -gt 1 ]]; then
