@@ -395,6 +395,12 @@ jobs:
           SUCCESS_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "success")] | length')
           TOTAL_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq 'length')
 
+          # Report to Telegram only when something is not green; skip on a clean full pass.
+          if [[ "$SUCCESS_COUNT" -eq "$TOTAL_COUNT" && "$TOTAL_COUNT" -gt 0 ]]; then
+            echo "All chunks passed - skipping Telegram notification"
+            exit 0
+          fi
+
           if [[ "$FAILED_COUNT" -gt 0 ]]; then
             OVERALL_STATUS="❌ Chunks failed (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
           elif [[ "$CANCELLED_COUNT" -gt 0 ]]; then
@@ -508,6 +514,12 @@ jobs:
           SUCCESS_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "success")] | length')
           TOTAL_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq 'length')
 
+          # Report to Telegram only when something is not green; skip on a clean full pass.
+          if [[ "$SUCCESS_COUNT" -eq "$TOTAL_COUNT" && "$TOTAL_COUNT" -gt 0 ]]; then
+            echo "All chunks passed - skipping Telegram notification"
+            exit 0
+          fi
+
           if [[ "$FAILED_COUNT" -gt 0 ]]; then
             OVERALL_STATUS="❌ Chunks failed (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
           elif [[ "$CANCELLED_COUNT" -gt 0 ]]; then
@@ -620,6 +632,12 @@ jobs:
           CANCELLED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "cancelled")] | length')
           SUCCESS_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "success")] | length')
           TOTAL_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq 'length')
+
+          # Report to Telegram only when something is not green; skip on a clean full pass.
+          if [[ "$SUCCESS_COUNT" -eq "$TOTAL_COUNT" && "$TOTAL_COUNT" -gt 0 ]]; then
+            echo "All chunks passed - skipping Telegram notification"
+            exit 0
+          fi
 
           if [[ "$FAILED_COUNT" -gt 0 ]]; then
             OVERALL_STATUS="❌ Chunks failed (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
