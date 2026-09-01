@@ -14,6 +14,9 @@ runs:
       with:
         repository: ONLYOFFICE-data/Dep.Tests
         path: Dep.Tests
+        sparse-checkout: |
+          puppeteer
+          tools
         token: ${{ inputs.read_pat }}
         submodules: false
         fetch-depth: 1

@@ -39,6 +39,9 @@ runs:
       with:
         repository: ONLYOFFICE-data/Dep.Tests
         path: Dep.Tests
+        sparse-checkout: |
+          puppeteer
+          tools
         token: ${{ inputs.github-token }}
         ref: ${{ inputs.branch }}
         submodules: false
