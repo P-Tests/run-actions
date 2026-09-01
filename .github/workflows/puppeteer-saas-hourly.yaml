@@ -55,7 +55,7 @@ jobs:
       docspaceUS: ${{ steps.resolve.outputs.docspaceUS }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Resolve Dep.Tests branches
         id: resolve
         shell: bash
@@ -96,7 +96,7 @@ jobs:
       fail-fast: false
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Install dependencies and populate caches
         uses: ./.github/actions/puppeteer-install-deps
         with:
@@ -112,7 +112,7 @@ jobs:
       chunk_size: ${{ steps.prepare.outputs.chunk_size }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Prepare test matrix
         id: prepare
         uses: ./.github/actions/puppeteer-prepare
@@ -136,7 +136,7 @@ jobs:
       fail-fast: false
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Run tests
         uses: ./.github/actions/puppeteer-run-chunk
         with:
@@ -165,7 +165,7 @@ jobs:
       fail-fast: false
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Collect UUIDs
         id: collect
@@ -260,7 +260,7 @@ jobs:
       chunk_size: ${{ steps.prepare.outputs.chunk_size }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Prepare test matrix
         id: prepare
         uses: ./.github/actions/puppeteer-prepare
@@ -284,7 +284,7 @@ jobs:
       fail-fast: false
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Run tests
         uses: ./.github/actions/puppeteer-run-chunk
         with:
@@ -313,7 +313,7 @@ jobs:
       fail-fast: false
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Collect UUIDs
         id: collect
@@ -405,7 +405,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Clear remote test files
         uses: ./.github/actions/puppeteer-clean
         with:
@@ -420,7 +420,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Clear remote test files
         uses: ./.github/actions/puppeteer-clean
         with:

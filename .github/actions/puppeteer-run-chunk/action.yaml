@@ -63,7 +63,7 @@ runs:
   using: 'composite'
   steps:
     - name: Checkout Dep.Tests repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
       with:
         repository: ONLYOFFICE-data/Dep.Tests
         path: Dep.Tests
@@ -76,7 +76,7 @@ runs:
         fetch-depth: 1
 
     - name: Checkout puppeteer/files (pp-files submodule)
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
       with:
         repository: ONLYOFFICE-data/pp-files
         path: Dep.Tests/puppeteer/files
@@ -84,31 +84,31 @@ runs:
         fetch-depth: 1
 
     - name: Cache Python 3.10 toolcache
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: ${{ runner.tool_cache }}/Python/3.10.*
         key: ${{ runner.os }}-${{ runner.arch }}-toolcache-python-3.10
 
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: '3.10'
 
     - name: Cache Report Portal client
       id: cache-rp-modules
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: Dep.Tests/tools/report_portal/pip_modules
         key: ${{ runner.os }}-${{ runner.arch }}-rp-modules-${{ hashFiles('Dep.Tests/tools/report_portal/config.json') }}
 
     - name: Set up Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v6
       with:
         node-version: '24'
 
     - name: Cache node_modules
       id: cache-node-modules
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: Dep.Tests/puppeteer/engine/node_modules
         key: ${{ runner.os }}-${{ runner.arch }}-node24-modules-${{ hashFiles('Dep.Tests/puppeteer/engine/package-lock.json') }}
@@ -121,7 +121,7 @@ runs:
 
     - name: Cache Puppeteer browsers
       id: cache-puppeteer
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: ~/.cache/puppeteer
         key: ${{ runner.os }}-puppeteer-chrome-${{ hashFiles('Dep.Tests/puppeteer/engine/package-lock.json') }}
