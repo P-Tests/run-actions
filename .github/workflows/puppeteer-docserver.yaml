@@ -66,7 +66,7 @@ jobs:
       branch: ${{ steps.resolve.outputs.branch }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Resolve Dep.Tests branch
         id: resolve
         shell: bash
@@ -91,7 +91,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Prepare test matrix
         id: prepare
@@ -103,9 +103,48 @@ jobs:
           read_pat: ${{ secrets.READ_PAT }}
           test_path: ${{ inputs.test_path }}
 
+  install-deps-windows:
+    name: Install dependencies - windows
+    if: "inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows'"
+    continue-on-error: true
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Install dependencies and populate caches
+        uses: ./.github/actions/puppeteer-install-deps
+        with:
+          read_pat: ${{ secrets.READ_PAT }}
+
+  install-deps-linux:
+    name: Install dependencies - linux
+    if: "inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux'"
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Install dependencies and populate caches
+        uses: ./.github/actions/puppeteer-install-deps
+        with:
+          read_pat: ${{ secrets.READ_PAT }}
+
+  install-deps-macos:
+    name: Install dependencies - macos
+    if: "inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos'"
+    continue-on-error: true
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Install dependencies and populate caches
+        uses: ./.github/actions/puppeteer-install-deps
+        with:
+          read_pat: ${{ secrets.READ_PAT }}
+
   run-tests-windows:
     name: Windows - Chunk ${{ matrix.chunk }}
-    needs: [prepare, branch-config]
+    needs: [prepare, branch-config, install-deps-windows]
     if: "!cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows')"
     runs-on: windows-latest
     strategy:
@@ -115,7 +154,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Run tests
         uses: ./.github/actions/puppeteer-run-chunk
@@ -144,7 +183,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Collect UUIDs
         id: collect
@@ -163,7 +202,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Merge Launches
         id: merge
@@ -179,7 +218,7 @@ jobs:
 
   run-tests-linux:
     name: Linux - Chunk ${{ matrix.chunk }}
-    needs: [prepare, branch-config]
+    needs: [prepare, branch-config, install-deps-linux]
     if: "!cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux')"
     runs-on: ubuntu-latest
     strategy:
@@ -189,7 +228,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Run tests
         uses: ./.github/actions/puppeteer-run-chunk
@@ -218,7 +257,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Collect UUIDs
         id: collect
@@ -237,7 +276,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Merge Launches
         id: merge
@@ -253,7 +292,7 @@ jobs:
 
   run-tests-macos:
     name: macOS - Chunk ${{ matrix.chunk }}
-    needs: [prepare, branch-config]
+    needs: [prepare, branch-config, install-deps-macos]
     if: "!cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos')"
     runs-on: macos-latest
     strategy:
@@ -263,7 +302,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Run tests
         uses: ./.github/actions/puppeteer-run-chunk
@@ -292,7 +331,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Collect UUIDs
         id: collect
@@ -311,7 +350,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Merge Launches
         id: merge
@@ -333,7 +372,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download URL artifact (single chunk)
         if: needs.prepare.outputs.num_chunks == '1'
@@ -431,7 +470,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download URL artifact (single chunk)
         if: needs.prepare.outputs.num_chunks == '1'
@@ -529,7 +568,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Download URL artifact (single chunk)
         if: needs.prepare.outputs.num_chunks == '1'

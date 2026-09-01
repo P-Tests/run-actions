@@ -9,12 +9,12 @@ jobs:
 
     steps:
       - name: Set up nodejs
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: 'latest'
 
       - name: Checkout main repository Dep.Tests
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: ONLYOFFICE-data/Dep.Tests
           path: Dep.Tests

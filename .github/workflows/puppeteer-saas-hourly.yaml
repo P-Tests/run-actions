@@ -2,7 +2,7 @@ name: Puppeteer SaaS Hourly Tests
 
 on:
   schedule:
-    - cron: '0 * * * *'
+    - cron: '15 * * * *'
   workflow_dispatch:
     inputs:
       os:
@@ -55,7 +55,7 @@ jobs:
       docspaceUS: ${{ steps.resolve.outputs.docspaceUS }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Resolve Dep.Tests branches
         id: resolve
         shell: bash
@@ -85,6 +85,23 @@ jobs:
             echo 'matrix={"os":[{"name":"macos","runner":"macos-latest","config":"mac"}]}' >> $GITHUB_OUTPUT
           fi
 
+  install-deps:
+    name: Install dependencies - ${{ matrix.os.name }}
+    needs: [setup]
+    continue-on-error: true
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      matrix:
+        os: ${{ fromJson(needs.setup.outputs.matrix).os }}
+      fail-fast: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Install dependencies and populate caches
+        uses: ./.github/actions/puppeteer-install-deps
+        with:
+          read_pat: ${{ secrets.READ_PAT }}
+
   prepare-docspaceEU:
     name: Prepare - DocSpace EU
     needs: [branch-config]
@@ -95,7 +112,7 @@ jobs:
       chunk_size: ${{ steps.prepare.outputs.chunk_size }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Prepare test matrix
         id: prepare
         uses: ./.github/actions/puppeteer-prepare
@@ -109,7 +126,7 @@ jobs:
 
   run-docspaceEU:
     name: DocSpace EU - ${{ matrix.os.name }} - Chunk ${{ matrix.chunk }}
-    needs: [setup, prepare-docspaceEU, branch-config]
+    needs: [setup, prepare-docspaceEU, branch-config, install-deps]
     if: "!cancelled()"
     runs-on: ${{ matrix.os.runner }}
     strategy:
@@ -119,7 +136,7 @@ jobs:
       fail-fast: false
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Run tests
         uses: ./.github/actions/puppeteer-run-chunk
         with:
@@ -148,7 +165,7 @@ jobs:
       fail-fast: false
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Collect UUIDs
         id: collect
@@ -243,7 +260,7 @@ jobs:
       chunk_size: ${{ steps.prepare.outputs.chunk_size }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Prepare test matrix
         id: prepare
         uses: ./.github/actions/puppeteer-prepare
@@ -257,7 +274,7 @@ jobs:
 
   run-docspaceUS:
     name: DocSpace US - ${{ matrix.os.name }} - Chunk ${{ matrix.chunk }}
-    needs: [setup, prepare-docspaceUS, branch-config]
+    needs: [setup, prepare-docspaceUS, branch-config, install-deps]
     if: "!cancelled()"
     runs-on: ${{ matrix.os.runner }}
     strategy:
@@ -267,7 +284,7 @@ jobs:
       fail-fast: false
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Run tests
         uses: ./.github/actions/puppeteer-run-chunk
         with:
@@ -296,7 +313,7 @@ jobs:
       fail-fast: false
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Collect UUIDs
         id: collect
@@ -388,7 +405,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Clear remote test files
         uses: ./.github/actions/puppeteer-clean
         with:
@@ -403,7 +420,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Clear remote test files
         uses: ./.github/actions/puppeteer-clean
         with:
