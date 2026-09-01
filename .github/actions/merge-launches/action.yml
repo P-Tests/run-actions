@@ -43,10 +43,23 @@ runs:
         ref: ${{ inputs.branch }}
         submodules: false
 
+    - name: Cache Python 3.10 toolcache
+      uses: actions/cache@v4
+      with:
+        path: ${{ runner.tool_cache }}/Python/3.10.*
+        key: ${{ runner.os }}-${{ runner.arch }}-toolcache-python-3.10
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
+
+    - name: Cache Report Portal client
+      id: cache-rp-modules
+      uses: actions/cache@v4
+      with:
+        path: Dep.Tests/tools/report_portal/pip_modules
+        key: ${{ runner.os }}-${{ runner.arch }}-rp-modules-${{ hashFiles('Dep.Tests/tools/report_portal/config.json') }}
 
     - name: Configure and Merge Launches
       id: merge

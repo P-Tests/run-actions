@@ -49,6 +49,12 @@ runs:
         fetch-depth: 1
         ref: ${{ inputs.branch }}
 
+    - name: Cache Python 3.10 toolcache
+      uses: actions/cache@v4
+      with:
+        path: ${{ runner.tool_cache }}/Python/3.10.*
+        key: ${{ runner.os }}-${{ runner.arch }}-toolcache-python-3.10
+
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
@@ -57,11 +63,19 @@ runs:
     - name: Set up Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: 'latest'
+        node-version: '24'
         cache: 'npm'
         cache-dependency-path: Dep.Tests/puppeteer/engine/package-lock.json
 
+    - name: Cache node_modules
+      id: cache-node-modules
+      uses: actions/cache@v4
+      with:
+        path: Dep.Tests/puppeteer/engine/node_modules
+        key: ${{ runner.os }}-${{ runner.arch }}-node24-modules-${{ hashFiles('Dep.Tests/puppeteer/engine/package-lock.json') }}
+
     - name: Install npm dependencies
+      if: steps.cache-node-modules.outputs.cache-hit != 'true'
       shell: bash
       working-directory: Dep.Tests/puppeteer/engine
       run: npm ci --prefer-offline --no-audit

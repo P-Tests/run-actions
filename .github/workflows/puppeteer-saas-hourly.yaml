@@ -85,6 +85,23 @@ jobs:
             echo 'matrix={"os":[{"name":"macos","runner":"macos-latest","config":"mac"}]}' >> $GITHUB_OUTPUT
           fi
 
+  install-deps:
+    name: Install dependencies - ${{ matrix.os.name }}
+    needs: [setup]
+    continue-on-error: true
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      matrix:
+        os: ${{ fromJson(needs.setup.outputs.matrix).os }}
+      fail-fast: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Install dependencies and populate caches
+        uses: ./.github/actions/puppeteer-install-deps
+        with:
+          read_pat: ${{ secrets.READ_PAT }}
+
   prepare-docspaceEU:
     name: Prepare - DocSpace EU
     needs: [branch-config]
@@ -109,7 +126,7 @@ jobs:
 
   run-docspaceEU:
     name: DocSpace EU - ${{ matrix.os.name }} - Chunk ${{ matrix.chunk }}
-    needs: [setup, prepare-docspaceEU, branch-config]
+    needs: [setup, prepare-docspaceEU, branch-config, install-deps]
     if: "!cancelled()"
     runs-on: ${{ matrix.os.runner }}
     strategy:
@@ -257,7 +274,7 @@ jobs:
 
   run-docspaceUS:
     name: DocSpace US - ${{ matrix.os.name }} - Chunk ${{ matrix.chunk }}
-    needs: [setup, prepare-docspaceUS, branch-config]
+    needs: [setup, prepare-docspaceUS, branch-config, install-deps]
     if: "!cancelled()"
     runs-on: ${{ matrix.os.runner }}
     strategy:

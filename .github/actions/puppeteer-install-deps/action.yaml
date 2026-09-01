@@ -1,18 +1,7 @@
-name: 'Puppeteer Clear Remote Files'
-description: 'Clear test files left on a provider remote server (runs once, after all chunks of a provider)'
+name: 'Puppeteer Install Dependencies'
+description: 'Install Python, Node.js, npm packages and Chrome once per run and populate the shared caches, so chunk jobs need no downloads'
 
 inputs:
-  provider:
-    description: 'Provider to clear (e.g. docspaceEU, ncoc, ocis)'
-    required: true
-  os_config:
-    description: 'Base config file name used as clearRun base config'
-    required: false
-    default: 'config_chrome_linux.json'
-  branch:
-    description: 'Dep.Tests branch to checkout'
-    required: false
-    default: 'master'
   read_pat:
     description: 'GitHub PAT for private repository access'
     required: true
@@ -26,7 +15,6 @@ runs:
         repository: ONLYOFFICE-data/Dep.Tests
         path: Dep.Tests
         token: ${{ inputs.read_pat }}
-        ref: ${{ inputs.branch }}
         submodules: false
         fetch-depth: 1
 
@@ -47,6 +35,12 @@ runs:
       with:
         path: Dep.Tests/tools/report_portal/pip_modules
         key: ${{ runner.os }}-${{ runner.arch }}-rp-modules-${{ hashFiles('Dep.Tests/tools/report_portal/config.json') }}
+
+    - name: Install Report Portal client
+      if: steps.cache-rp-modules.outputs.cache-hit != 'true'
+      shell: bash
+      working-directory: Dep.Tests/tools/report_portal
+      run: python -c "from report_portal_launcher import ReportPortalLauncher; ReportPortalLauncher()"
 
     - name: Set up Node.js
       uses: actions/setup-node@v4
@@ -80,19 +74,6 @@ runs:
     - name: Install Chrome for Puppeteer
       if: steps.cache-puppeteer.outputs.cache-hit != 'true'
       shell: bash
-      run: |
-        cd Dep.Tests/puppeteer/engine
-        npx puppeteer browsers install chrome
-
-    - name: Generate method descriptions
-      shell: bash
       working-directory: Dep.Tests/puppeteer/engine
-      # run.py generates engine/descriptions/methodsDescription.json on startup; clearRun needs it to load the provider module tree
-      run: python run.py --count-tests --providers ${{ inputs.provider }} > /dev/null 2>&1 || true
+      run: npx puppeteer browsers install chrome
 
-    - name: Clear remote test files
-      shell: bash
-      working-directory: Dep.Tests/puppeteer/engine
-      run: |
-        echo "Clearing remote files for ${{ inputs.provider }} (after all chunks)"
-        node script/js/scripts/clearRun.js "${{ inputs.provider }}" "../${{ inputs.os_config }}"
