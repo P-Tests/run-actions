@@ -2,7 +2,7 @@ name: Puppeteer Daily Tests
 
 on:
   schedule:
-    - cron: "0 20 * * *"
+    - cron: "53 20 * * *"
   workflow_dispatch:
     inputs:
       os:

@@ -2,7 +2,7 @@ name: Puppeteer SaaS Hourly Tests
 
 on:
   schedule:
-    - cron: '15 * * * *'
+    - cron: '37 * * * *'
   workflow_dispatch:
     inputs:
       os:
