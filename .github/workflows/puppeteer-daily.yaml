@@ -46,6 +46,10 @@ on:
         default: ''
         type: string
 
+concurrency:
+  group: puppeteer-stands
+  cancel-in-progress: false
+
 jobs:
   branch-config:
     name: Resolve branches
@@ -126,14 +130,13 @@ jobs:
           read_pat: ${{ secrets.READ_PAT }}
           test_path: ${{ inputs.test_path }}
 
-  run-docspaceEU:
-    name: DocSpace EU - ${{ matrix.os.name }} - Chunk ${{ matrix.chunk }}
+  run-docspaceEU-windows:
+    name: DocSpace EU - windows - Chunk ${{ matrix.chunk }}
     needs: [setup, prepare-docspaceEU, branch-config, install-deps]
-    if: "!cancelled()"
-    runs-on: ${{ matrix.os.runner }}
+    if: ${{ !cancelled() && contains(fromJson(needs.setup.outputs.matrix).os.*.name, 'windows') }}
+    runs-on: windows-latest
     strategy:
       matrix:
-        os: ${{ fromJson(needs.setup.outputs.matrix).os }}
         chunk: ${{ fromJson(needs.prepare-docspaceEU.outputs.matrix).chunk }}
       fail-fast: false
     steps:
@@ -146,8 +149,8 @@ jobs:
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
           chunk_id: ${{ matrix.chunk }}
           chunk_size: ${{ needs.prepare-docspaceEU.outputs.chunk_size }}
-          os_name: ${{ matrix.os.name }}
-          os_config: config_chrome_${{ matrix.os.config }}.json
+          os_name: windows
+          os_config: config_chrome_win.json
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
           launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-docspaceEU.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
@@ -155,10 +158,71 @@ jobs:
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           test_path: ${{ inputs.test_path }}
           clean: false
+          threads: 1
+
+  run-docspaceEU-linux:
+    name: DocSpace EU - linux - Chunk ${{ matrix.chunk }}
+    needs: [setup, prepare-docspaceEU, branch-config, install-deps, run-docspaceEU-windows]
+    if: ${{ !cancelled() && contains(fromJson(needs.setup.outputs.matrix).os.*.name, 'linux') }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        chunk: ${{ fromJson(needs.prepare-docspaceEU.outputs.matrix).chunk }}
+      fail-fast: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Run tests
+        uses: ./.github/actions/puppeteer-run-chunk
+        with:
+          provider: docspaceEU
+          suite: ${{ inputs.test_path == '' && 'daily' || '' }}
+          chunk_id: ${{ matrix.chunk }}
+          chunk_size: ${{ needs.prepare-docspaceEU.outputs.chunk_size }}
+          os_name: linux
+          os_config: config_chrome_linux.json
+          project_name: ${{ inputs.project_name || 'docsserver-daily' }}
+          launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-docspaceEU.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
+          read_pat: ${{ secrets.READ_PAT }}
+          branch: ${{ needs.branch-config.outputs.docspaceEU }}
+          report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          test_path: ${{ inputs.test_path }}
+          clean: false
+          threads: 1
+
+  run-docspaceEU-macos:
+    name: DocSpace EU - macos - Chunk ${{ matrix.chunk }}
+    needs: [setup, prepare-docspaceEU, branch-config, install-deps, run-docspaceEU-linux]
+    if: ${{ !cancelled() && contains(fromJson(needs.setup.outputs.matrix).os.*.name, 'macos') }}
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        chunk: ${{ fromJson(needs.prepare-docspaceEU.outputs.matrix).chunk }}
+      fail-fast: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Run tests
+        uses: ./.github/actions/puppeteer-run-chunk
+        with:
+          provider: docspaceEU
+          suite: ${{ inputs.test_path == '' && 'daily' || '' }}
+          chunk_id: ${{ matrix.chunk }}
+          chunk_size: ${{ needs.prepare-docspaceEU.outputs.chunk_size }}
+          os_name: macos
+          os_config: config_chrome_mac.json
+          project_name: ${{ inputs.project_name || 'docsserver-daily' }}
+          launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-docspaceEU.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
+          read_pat: ${{ secrets.READ_PAT }}
+          branch: ${{ needs.branch-config.outputs.docspaceEU }}
+          report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          test_path: ${{ inputs.test_path }}
+          clean: false
+          threads: 1
 
   post-docspaceEU:
     name: Post - DocSpace EU - ${{ matrix.os.name }}
-    needs: [setup, prepare-docspaceEU, run-docspaceEU, branch-config]
+    needs: [setup, prepare-docspaceEU, run-docspaceEU-windows, run-docspaceEU-linux, run-docspaceEU-macos, branch-config]
     if: "!cancelled()"
     runs-on: ubuntu-latest
     strategy:
@@ -274,14 +338,13 @@ jobs:
           read_pat: ${{ secrets.READ_PAT }}
           test_path: ${{ inputs.test_path }}
 
-  run-docspaceUS:
-    name: DocSpace US - ${{ matrix.os.name }} - Chunk ${{ matrix.chunk }}
+  run-docspaceUS-windows:
+    name: DocSpace US - windows - Chunk ${{ matrix.chunk }}
     needs: [setup, prepare-docspaceUS, branch-config, install-deps]
-    if: "!cancelled()"
-    runs-on: ${{ matrix.os.runner }}
+    if: ${{ !cancelled() && contains(fromJson(needs.setup.outputs.matrix).os.*.name, 'windows') }}
+    runs-on: windows-latest
     strategy:
       matrix:
-        os: ${{ fromJson(needs.setup.outputs.matrix).os }}
         chunk: ${{ fromJson(needs.prepare-docspaceUS.outputs.matrix).chunk }}
       fail-fast: false
     steps:
@@ -294,8 +357,8 @@ jobs:
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
           chunk_id: ${{ matrix.chunk }}
           chunk_size: ${{ needs.prepare-docspaceUS.outputs.chunk_size }}
-          os_name: ${{ matrix.os.name }}
-          os_config: config_chrome_${{ matrix.os.config }}.json
+          os_name: windows
+          os_config: config_chrome_win.json
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
           launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-docspaceUS.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
@@ -303,10 +366,71 @@ jobs:
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           test_path: ${{ inputs.test_path }}
           clean: false
+          threads: 1
+
+  run-docspaceUS-linux:
+    name: DocSpace US - linux - Chunk ${{ matrix.chunk }}
+    needs: [setup, prepare-docspaceUS, branch-config, install-deps, run-docspaceUS-windows]
+    if: ${{ !cancelled() && contains(fromJson(needs.setup.outputs.matrix).os.*.name, 'linux') }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        chunk: ${{ fromJson(needs.prepare-docspaceUS.outputs.matrix).chunk }}
+      fail-fast: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Run tests
+        uses: ./.github/actions/puppeteer-run-chunk
+        with:
+          provider: docspaceUS
+          suite: ${{ inputs.test_path == '' && 'daily' || '' }}
+          chunk_id: ${{ matrix.chunk }}
+          chunk_size: ${{ needs.prepare-docspaceUS.outputs.chunk_size }}
+          os_name: linux
+          os_config: config_chrome_linux.json
+          project_name: ${{ inputs.project_name || 'docsserver-daily' }}
+          launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-docspaceUS.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
+          read_pat: ${{ secrets.READ_PAT }}
+          branch: ${{ needs.branch-config.outputs.docspaceUS }}
+          report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          test_path: ${{ inputs.test_path }}
+          clean: false
+          threads: 1
+
+  run-docspaceUS-macos:
+    name: DocSpace US - macos - Chunk ${{ matrix.chunk }}
+    needs: [setup, prepare-docspaceUS, branch-config, install-deps, run-docspaceUS-linux]
+    if: ${{ !cancelled() && contains(fromJson(needs.setup.outputs.matrix).os.*.name, 'macos') }}
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        chunk: ${{ fromJson(needs.prepare-docspaceUS.outputs.matrix).chunk }}
+      fail-fast: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Run tests
+        uses: ./.github/actions/puppeteer-run-chunk
+        with:
+          provider: docspaceUS
+          suite: ${{ inputs.test_path == '' && 'daily' || '' }}
+          chunk_id: ${{ matrix.chunk }}
+          chunk_size: ${{ needs.prepare-docspaceUS.outputs.chunk_size }}
+          os_name: macos
+          os_config: config_chrome_mac.json
+          project_name: ${{ inputs.project_name || 'docsserver-daily' }}
+          launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-docspaceUS.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
+          read_pat: ${{ secrets.READ_PAT }}
+          branch: ${{ needs.branch-config.outputs.docspaceUS }}
+          report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          test_path: ${{ inputs.test_path }}
+          clean: false
+          threads: 1
 
   post-docspaceUS:
     name: Post - DocSpace US - ${{ matrix.os.name }}
-    needs: [setup, prepare-docspaceUS, run-docspaceUS, branch-config]
+    needs: [setup, prepare-docspaceUS, run-docspaceUS-windows, run-docspaceUS-linux, run-docspaceUS-macos, branch-config]
     if: "!cancelled()"
     runs-on: ubuntu-latest
     strategy:
@@ -422,14 +546,13 @@ jobs:
           read_pat: ${{ secrets.READ_PAT }}
           test_path: ${{ inputs.test_path }}
 
-  run-ncoc:
-    name: NCOC - ${{ matrix.os.name }} - Chunk ${{ matrix.chunk }}
+  run-ncoc-windows:
+    name: NCOC - windows - Chunk ${{ matrix.chunk }}
     needs: [setup, prepare-ncoc, branch-config, install-deps]
-    if: "!cancelled()"
-    runs-on: ${{ matrix.os.runner }}
+    if: ${{ !cancelled() && contains(fromJson(needs.setup.outputs.matrix).os.*.name, 'windows') }}
+    runs-on: windows-latest
     strategy:
       matrix:
-        os: ${{ fromJson(needs.setup.outputs.matrix).os }}
         chunk: ${{ fromJson(needs.prepare-ncoc.outputs.matrix).chunk }}
       fail-fast: false
     steps:
@@ -442,8 +565,8 @@ jobs:
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
           chunk_id: ${{ matrix.chunk }}
           chunk_size: ${{ needs.prepare-ncoc.outputs.chunk_size }}
-          os_name: ${{ matrix.os.name }}
-          os_config: config_chrome_${{ matrix.os.config }}.json
+          os_name: windows
+          os_config: config_chrome_win.json
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
           launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-ncoc.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
@@ -451,10 +574,71 @@ jobs:
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           test_path: ${{ inputs.test_path }}
           clean: false
+          threads: 1
+
+  run-ncoc-linux:
+    name: NCOC - linux - Chunk ${{ matrix.chunk }}
+    needs: [setup, prepare-ncoc, branch-config, install-deps, run-ncoc-windows]
+    if: ${{ !cancelled() && contains(fromJson(needs.setup.outputs.matrix).os.*.name, 'linux') }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        chunk: ${{ fromJson(needs.prepare-ncoc.outputs.matrix).chunk }}
+      fail-fast: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Run tests
+        uses: ./.github/actions/puppeteer-run-chunk
+        with:
+          provider: ncoc
+          suite: ${{ inputs.test_path == '' && 'daily' || '' }}
+          chunk_id: ${{ matrix.chunk }}
+          chunk_size: ${{ needs.prepare-ncoc.outputs.chunk_size }}
+          os_name: linux
+          os_config: config_chrome_linux.json
+          project_name: ${{ inputs.project_name || 'docsserver-daily' }}
+          launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-ncoc.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
+          read_pat: ${{ secrets.READ_PAT }}
+          branch: ${{ needs.branch-config.outputs.ncoc }}
+          report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          test_path: ${{ inputs.test_path }}
+          clean: false
+          threads: 1
+
+  run-ncoc-macos:
+    name: NCOC - macos - Chunk ${{ matrix.chunk }}
+    needs: [setup, prepare-ncoc, branch-config, install-deps, run-ncoc-linux]
+    if: ${{ !cancelled() && contains(fromJson(needs.setup.outputs.matrix).os.*.name, 'macos') }}
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        chunk: ${{ fromJson(needs.prepare-ncoc.outputs.matrix).chunk }}
+      fail-fast: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Run tests
+        uses: ./.github/actions/puppeteer-run-chunk
+        with:
+          provider: ncoc
+          suite: ${{ inputs.test_path == '' && 'daily' || '' }}
+          chunk_id: ${{ matrix.chunk }}
+          chunk_size: ${{ needs.prepare-ncoc.outputs.chunk_size }}
+          os_name: macos
+          os_config: config_chrome_mac.json
+          project_name: ${{ inputs.project_name || 'docsserver-daily' }}
+          launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-ncoc.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
+          read_pat: ${{ secrets.READ_PAT }}
+          branch: ${{ needs.branch-config.outputs.ncoc }}
+          report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          test_path: ${{ inputs.test_path }}
+          clean: false
+          threads: 1
 
   post-ncoc:
     name: Post - NCOC - ${{ matrix.os.name }}
-    needs: [setup, prepare-ncoc, run-ncoc, branch-config]
+    needs: [setup, prepare-ncoc, run-ncoc-windows, run-ncoc-linux, run-ncoc-macos, branch-config]
     if: "!cancelled()"
     runs-on: ubuntu-latest
     strategy:
@@ -570,14 +754,13 @@ jobs:
           read_pat: ${{ secrets.READ_PAT }}
           test_path: ${{ inputs.test_path }}
 
-  run-ocis:
-    name: OCIS - ${{ matrix.os.name }} - Chunk ${{ matrix.chunk }}
+  run-ocis-windows:
+    name: OCIS - windows - Chunk ${{ matrix.chunk }}
     needs: [setup, prepare-ocis, branch-config, install-deps]
-    if: "!cancelled()"
-    runs-on: ${{ matrix.os.runner }}
+    if: ${{ !cancelled() && contains(fromJson(needs.setup.outputs.matrix).os.*.name, 'windows') }}
+    runs-on: windows-latest
     strategy:
       matrix:
-        os: ${{ fromJson(needs.setup.outputs.matrix).os }}
         chunk: ${{ fromJson(needs.prepare-ocis.outputs.matrix).chunk }}
       fail-fast: false
     steps:
@@ -590,8 +773,8 @@ jobs:
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
           chunk_id: ${{ matrix.chunk }}
           chunk_size: ${{ needs.prepare-ocis.outputs.chunk_size }}
-          os_name: ${{ matrix.os.name }}
-          os_config: config_chrome_${{ matrix.os.config }}.json
+          os_name: windows
+          os_config: config_chrome_win.json
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
           launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-ocis.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
@@ -599,10 +782,71 @@ jobs:
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           test_path: ${{ inputs.test_path }}
           clean: false
+          threads: 1
+
+  run-ocis-linux:
+    name: OCIS - linux - Chunk ${{ matrix.chunk }}
+    needs: [setup, prepare-ocis, branch-config, install-deps, run-ocis-windows]
+    if: ${{ !cancelled() && contains(fromJson(needs.setup.outputs.matrix).os.*.name, 'linux') }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        chunk: ${{ fromJson(needs.prepare-ocis.outputs.matrix).chunk }}
+      fail-fast: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Run tests
+        uses: ./.github/actions/puppeteer-run-chunk
+        with:
+          provider: ocis
+          suite: ${{ inputs.test_path == '' && 'daily' || '' }}
+          chunk_id: ${{ matrix.chunk }}
+          chunk_size: ${{ needs.prepare-ocis.outputs.chunk_size }}
+          os_name: linux
+          os_config: config_chrome_linux.json
+          project_name: ${{ inputs.project_name || 'docsserver-daily' }}
+          launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-ocis.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
+          read_pat: ${{ secrets.READ_PAT }}
+          branch: ${{ needs.branch-config.outputs.ocis }}
+          report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          test_path: ${{ inputs.test_path }}
+          clean: false
+          threads: 1
+
+  run-ocis-macos:
+    name: OCIS - macos - Chunk ${{ matrix.chunk }}
+    needs: [setup, prepare-ocis, branch-config, install-deps, run-ocis-linux]
+    if: ${{ !cancelled() && contains(fromJson(needs.setup.outputs.matrix).os.*.name, 'macos') }}
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        chunk: ${{ fromJson(needs.prepare-ocis.outputs.matrix).chunk }}
+      fail-fast: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Run tests
+        uses: ./.github/actions/puppeteer-run-chunk
+        with:
+          provider: ocis
+          suite: ${{ inputs.test_path == '' && 'daily' || '' }}
+          chunk_id: ${{ matrix.chunk }}
+          chunk_size: ${{ needs.prepare-ocis.outputs.chunk_size }}
+          os_name: macos
+          os_config: config_chrome_mac.json
+          project_name: ${{ inputs.project_name || 'docsserver-daily' }}
+          launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-ocis.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
+          read_pat: ${{ secrets.READ_PAT }}
+          branch: ${{ needs.branch-config.outputs.ocis }}
+          report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          test_path: ${{ inputs.test_path }}
+          clean: false
+          threads: 1
 
   post-ocis:
     name: Post - OCIS - ${{ matrix.os.name }}
-    needs: [setup, prepare-ocis, run-ocis, branch-config]
+    needs: [setup, prepare-ocis, run-ocis-windows, run-ocis-linux, run-ocis-macos, branch-config]
     if: "!cancelled()"
     runs-on: ubuntu-latest
     strategy:
@@ -699,7 +943,7 @@ jobs:
   clean-docspaceEU:
     name: Clean - DocSpace EU
     needs: [post-docspaceEU, branch-config]
-    if: ${{ !cancelled() && inputs.clean }}
+    if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || inputs.clean) }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -714,7 +958,7 @@ jobs:
   clean-docspaceUS:
     name: Clean - DocSpace US
     needs: [post-docspaceUS, branch-config]
-    if: ${{ !cancelled() && inputs.clean }}
+    if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || inputs.clean) }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -729,7 +973,7 @@ jobs:
   clean-ncoc:
     name: Clean - NCOC
     needs: [post-ncoc, branch-config]
-    if: ${{ !cancelled() && inputs.clean }}
+    if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || inputs.clean) }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -744,7 +988,7 @@ jobs:
   clean-ocis:
     name: Clean - OCIS
     needs: [post-ocis, branch-config]
-    if: ${{ !cancelled() && inputs.clean }}
+    if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || inputs.clean) }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
