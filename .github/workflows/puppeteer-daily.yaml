@@ -943,7 +943,7 @@ jobs:
   clean-docspaceEU:
     name: Clean - DocSpace EU
     needs: [post-docspaceEU, branch-config]
-    if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || inputs.clean) }}
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.clean }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -958,7 +958,7 @@ jobs:
   clean-docspaceUS:
     name: Clean - DocSpace US
     needs: [post-docspaceUS, branch-config]
-    if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || inputs.clean) }}
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.clean }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
