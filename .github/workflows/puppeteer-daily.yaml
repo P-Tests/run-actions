@@ -79,8 +79,10 @@ jobs:
     steps:
       - id: set-matrix
         shell: bash
+        env:
+          OS_INPUT: ${{ inputs.os }}
         run: |
-          OS="${{ inputs.os }}"
+          OS="$OS_INPUT"
           if [ -z "$OS" ] || [ "$OS" == "all" ]; then
             echo 'matrix={"os":[{"name":"windows","runner":"windows-latest","config":"win"},{"name":"linux","runner":"ubuntu-latest","config":"linux"},{"name":"macos","runner":"macos-latest","config":"mac"}]}' >> $GITHUB_OUTPUT
           elif [ "$OS" == "windows" ]; then
@@ -113,6 +115,7 @@ jobs:
     needs: [branch-config]
     runs-on: ubuntu-latest
     outputs:
+      branch: ${{ needs.branch-config.outputs.docspaceEU }}
       matrix: ${{ steps.prepare.outputs.matrix }}
       num_chunks: ${{ steps.prepare.outputs.num_chunks }}
       chunk_size: ${{ steps.prepare.outputs.chunk_size }}
@@ -132,8 +135,8 @@ jobs:
 
   run-docspaceEU-windows:
     name: DocSpace EU - windows - Chunk ${{ matrix.chunk }}
-    needs: [setup, prepare-docspaceEU, branch-config, install-deps]
-    if: ${{ !cancelled() && contains(fromJson(needs.setup.outputs.matrix).os.*.name, 'windows') }}
+    needs: [prepare-docspaceEU, install-deps]
+    if: ${{ !cancelled() && needs.prepare-docspaceEU.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows') }}
     runs-on: windows-latest
     strategy:
       matrix:
@@ -149,12 +152,13 @@ jobs:
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
           chunk_id: ${{ matrix.chunk }}
           chunk_size: ${{ needs.prepare-docspaceEU.outputs.chunk_size }}
+          num_chunks: ${{ needs.prepare-docspaceEU.outputs.num_chunks }}
           os_name: windows
           os_config: config_chrome_win.json
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
           launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-docspaceEU.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
-          branch: ${{ needs.branch-config.outputs.docspaceEU }}
+          branch: ${{ needs.prepare-docspaceEU.outputs.branch }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           test_path: ${{ inputs.test_path }}
           clean: false
@@ -162,8 +166,8 @@ jobs:
 
   run-docspaceEU-linux:
     name: DocSpace EU - linux - Chunk ${{ matrix.chunk }}
-    needs: [setup, prepare-docspaceEU, branch-config, install-deps, run-docspaceEU-windows]
-    if: ${{ !cancelled() && contains(fromJson(needs.setup.outputs.matrix).os.*.name, 'linux') }}
+    needs: [prepare-docspaceEU, run-docspaceEU-windows]
+    if: ${{ !cancelled() && needs.prepare-docspaceEU.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux') }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -179,12 +183,13 @@ jobs:
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
           chunk_id: ${{ matrix.chunk }}
           chunk_size: ${{ needs.prepare-docspaceEU.outputs.chunk_size }}
+          num_chunks: ${{ needs.prepare-docspaceEU.outputs.num_chunks }}
           os_name: linux
           os_config: config_chrome_linux.json
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
           launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-docspaceEU.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
-          branch: ${{ needs.branch-config.outputs.docspaceEU }}
+          branch: ${{ needs.prepare-docspaceEU.outputs.branch }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           test_path: ${{ inputs.test_path }}
           clean: false
@@ -192,8 +197,8 @@ jobs:
 
   run-docspaceEU-macos:
     name: DocSpace EU - macos - Chunk ${{ matrix.chunk }}
-    needs: [setup, prepare-docspaceEU, branch-config, install-deps, run-docspaceEU-linux]
-    if: ${{ !cancelled() && contains(fromJson(needs.setup.outputs.matrix).os.*.name, 'macos') }}
+    needs: [prepare-docspaceEU, run-docspaceEU-linux]
+    if: ${{ !cancelled() && needs.prepare-docspaceEU.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos') }}
     runs-on: macos-latest
     strategy:
       matrix:
@@ -209,118 +214,97 @@ jobs:
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
           chunk_id: ${{ matrix.chunk }}
           chunk_size: ${{ needs.prepare-docspaceEU.outputs.chunk_size }}
+          num_chunks: ${{ needs.prepare-docspaceEU.outputs.num_chunks }}
           os_name: macos
           os_config: config_chrome_mac.json
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
           launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-docspaceEU.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
-          branch: ${{ needs.branch-config.outputs.docspaceEU }}
+          branch: ${{ needs.prepare-docspaceEU.outputs.branch }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           test_path: ${{ inputs.test_path }}
           clean: false
           threads: 1
 
-  post-docspaceEU:
-    name: Post - DocSpace EU - ${{ matrix.os.name }}
-    needs: [setup, prepare-docspaceEU, run-docspaceEU-windows, run-docspaceEU-linux, run-docspaceEU-macos, branch-config]
-    if: "!cancelled()"
+  post-docspaceEU-windows:
+    name: Post - DocSpace EU - windows
+    needs: [prepare-docspaceEU, run-docspaceEU-windows]
+    if: ${{ !cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows') }}
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        os: ${{ fromJson(needs.setup.outputs.matrix).os }}
-      fail-fast: false
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Collect UUIDs
-        id: collect
-        if: needs.prepare-docspaceEU.outputs.num_chunks > 1
-        uses: ./.github/actions/collect-uuids
+      - name: Report DocSpace EU - windows
+        uses: ./.github/actions/puppeteer-post
         with:
-          os-name: ${{ matrix.os.name }}
           provider: docspaceEU
+          os_name: windows
+          job_name_prefix: 'DocSpace EU'
+          num_chunks: ${{ needs.prepare-docspaceEU.outputs.num_chunks }}
+          launch_name: Daily Tests
+          project_name: ${{ inputs.project_name || 'docsserver-daily' }}
+          api_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          branch: ${{ needs.prepare-docspaceEU.outputs.branch }}
+          read_pat: ${{ secrets.READ_PAT }}
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_TO }}
 
-      - name: Merge Launches
-        id: merge
-        if: needs.prepare-docspaceEU.outputs.num_chunks > 1
-        uses: ./.github/actions/merge-launches
+  post-docspaceEU-linux:
+    name: Post - DocSpace EU - linux
+    needs: [prepare-docspaceEU, run-docspaceEU-linux]
+    if: ${{ !cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Report DocSpace EU - linux
+        uses: ./.github/actions/puppeteer-post
         with:
-          os-name: ${{ matrix.os.name }}
-          launch-uuids: ${{ steps.collect.outputs.launch_uuids }}
-          api-key: ${{ inputs.api_key || secrets.REPORT_KEY }}
-          project-name: ${{ inputs.project_name || 'docsserver-daily' }}
-          github-token: ${{ secrets.READ_PAT }}
-          branch: ${{ needs.branch-config.outputs.docspaceEU }}
-          launch-name: Daily Tests
+          provider: docspaceEU
+          os_name: linux
+          job_name_prefix: 'DocSpace EU'
+          num_chunks: ${{ needs.prepare-docspaceEU.outputs.num_chunks }}
+          launch_name: Daily Tests
+          project_name: ${{ inputs.project_name || 'docsserver-daily' }}
+          api_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          branch: ${{ needs.prepare-docspaceEU.outputs.branch }}
+          read_pat: ${{ secrets.READ_PAT }}
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_TO }}
 
-      - name: Download URL artifact (single chunk)
-        if: needs.prepare-docspaceEU.outputs.num_chunks == '1'
-        uses: actions/download-artifact@v4
+  post-docspaceEU-macos:
+    name: Post - DocSpace EU - macos
+    needs: [prepare-docspaceEU, run-docspaceEU-macos]
+    if: ${{ !cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Report DocSpace EU - macos
+        uses: ./.github/actions/puppeteer-post
         with:
-          pattern: launch-url-docspaceEU-${{ matrix.os.name }}-chunk-*
-          path: url-artifacts
+          provider: docspaceEU
+          os_name: macos
+          job_name_prefix: 'DocSpace EU'
+          num_chunks: ${{ needs.prepare-docspaceEU.outputs.num_chunks }}
+          launch_name: Daily Tests
+          project_name: ${{ inputs.project_name || 'docsserver-daily' }}
+          api_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          branch: ${{ needs.prepare-docspaceEU.outputs.branch }}
+          read_pat: ${{ secrets.READ_PAT }}
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_TO }}
 
-      - name: Get RP URL
-        id: get-rp-url
-        shell: bash
-        run: |
-          if [ "${{ needs.prepare-docspaceEU.outputs.num_chunks }}" == "1" ]; then
-            URL=$(cat url-artifacts/launch-url-docspaceEU-${{ matrix.os.name }}-chunk-*/launch_url.txt 2>/dev/null | head -n 1 | tr -d '[:space:]' || echo "")
-            echo "rp_url=$URL" >> $GITHUB_OUTPUT
-          else
-            echo "rp_url=${{ steps.merge.outputs.rp_launch_url }}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Collect chunk jobs info
-        id: collect-chunks
-        if: always()
-        shell: bash
-        run: |
-          JOBS_JSON=$(gh run view ${{ github.run_id }} --json jobs | jq '.jobs')
-          CHUNKS=$(echo "$JOBS_JSON" | jq -r '[.[] | select(.name | startswith("DocSpace EU - ${{ matrix.os.name }}"))] | map({name: .name, status: .status, conclusion: .conclusion, id: .databaseId, url: .url}) | @json')
-          echo "chunks=$CHUNKS" >> $GITHUB_OUTPUT
-        env:
-          GITHUB_TOKEN: ${{ secrets.READ_PAT }}
-
-      - name: Send Telegram notification
-        if: always()
-        shell: bash
-        run: |
-          FAILED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "failure")] | length')
-          CANCELLED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "cancelled")] | length')
-          SUCCESS_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "success")] | length')
-          TOTAL_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq 'length')
-
-          # Report to Telegram only when something is not green; skip on a clean full pass.
-          if [[ "$SUCCESS_COUNT" -eq "$TOTAL_COUNT" && "$TOTAL_COUNT" -gt 0 ]]; then
-            echo "All chunks passed - skipping Telegram notification"
-            exit 0
-          fi
-          if [[ "$FAILED_COUNT" -gt 0 ]]; then
-            OVERALL_STATUS="\u274C Chunks failed (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
-          elif [[ "$CANCELLED_COUNT" -gt 0 ]]; then
-            OVERALL_STATUS="\u26D4 Some chunks cancelled (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
-          elif [[ "$SUCCESS_COUNT" -eq "$TOTAL_COUNT" ]] && [[ "$TOTAL_COUNT" -gt 0 ]]; then
-            OVERALL_STATUS="\u2705 All chunks passed (${TOTAL_COUNT}/${TOTAL_COUNT})"
-          else
-            OVERALL_STATUS="\u2753 Chunks status unknown"
-          fi
-          MESSAGE="\n*Workflow:* ${{ github.workflow }}\n*Provider:* docspaceEU\n*OS:* ${{ matrix.os.name }}\n*Status:* ${OVERALL_STATUS}"
-          MESSAGE="${MESSAGE}\n[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
-          if [[ -n "${{ steps.get-rp-url.outputs.rp_url }}" ]]; then MESSAGE="${MESSAGE}\n[View Report Portal](${{ steps.get-rp-url.outputs.rp_url }})"; fi
-          MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
-            -H "Content-Type: application/json" \
-            -d "{\"chat_id\":\"${{ secrets.TELEGRAM_TO }}\",\"text\":\"$MESSAGE\",\"parse_mode\":\"Markdown\",\"disable_notification\":true,\"disable_web_page_preview\":true}"
-        env:
-          GITHUB_TOKEN: ${{ secrets.READ_PAT }}
 
   prepare-docspaceUS:
     name: Prepare - DocSpace US
     needs: [branch-config]
     runs-on: ubuntu-latest
     outputs:
+      branch: ${{ needs.branch-config.outputs.docspaceUS }}
       matrix: ${{ steps.prepare.outputs.matrix }}
       num_chunks: ${{ steps.prepare.outputs.num_chunks }}
       chunk_size: ${{ steps.prepare.outputs.chunk_size }}
@@ -340,8 +324,8 @@ jobs:
 
   run-docspaceUS-windows:
     name: DocSpace US - windows - Chunk ${{ matrix.chunk }}
-    needs: [setup, prepare-docspaceUS, branch-config, install-deps]
-    if: ${{ !cancelled() && contains(fromJson(needs.setup.outputs.matrix).os.*.name, 'windows') }}
+    needs: [prepare-docspaceUS, install-deps]
+    if: ${{ !cancelled() && needs.prepare-docspaceUS.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows') }}
     runs-on: windows-latest
     strategy:
       matrix:
@@ -357,12 +341,13 @@ jobs:
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
           chunk_id: ${{ matrix.chunk }}
           chunk_size: ${{ needs.prepare-docspaceUS.outputs.chunk_size }}
+          num_chunks: ${{ needs.prepare-docspaceUS.outputs.num_chunks }}
           os_name: windows
           os_config: config_chrome_win.json
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
           launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-docspaceUS.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
-          branch: ${{ needs.branch-config.outputs.docspaceUS }}
+          branch: ${{ needs.prepare-docspaceUS.outputs.branch }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           test_path: ${{ inputs.test_path }}
           clean: false
@@ -370,8 +355,8 @@ jobs:
 
   run-docspaceUS-linux:
     name: DocSpace US - linux - Chunk ${{ matrix.chunk }}
-    needs: [setup, prepare-docspaceUS, branch-config, install-deps, run-docspaceUS-windows]
-    if: ${{ !cancelled() && contains(fromJson(needs.setup.outputs.matrix).os.*.name, 'linux') }}
+    needs: [prepare-docspaceUS, run-docspaceUS-windows]
+    if: ${{ !cancelled() && needs.prepare-docspaceUS.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux') }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -387,12 +372,13 @@ jobs:
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
           chunk_id: ${{ matrix.chunk }}
           chunk_size: ${{ needs.prepare-docspaceUS.outputs.chunk_size }}
+          num_chunks: ${{ needs.prepare-docspaceUS.outputs.num_chunks }}
           os_name: linux
           os_config: config_chrome_linux.json
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
           launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-docspaceUS.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
-          branch: ${{ needs.branch-config.outputs.docspaceUS }}
+          branch: ${{ needs.prepare-docspaceUS.outputs.branch }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           test_path: ${{ inputs.test_path }}
           clean: false
@@ -400,8 +386,8 @@ jobs:
 
   run-docspaceUS-macos:
     name: DocSpace US - macos - Chunk ${{ matrix.chunk }}
-    needs: [setup, prepare-docspaceUS, branch-config, install-deps, run-docspaceUS-linux]
-    if: ${{ !cancelled() && contains(fromJson(needs.setup.outputs.matrix).os.*.name, 'macos') }}
+    needs: [prepare-docspaceUS, run-docspaceUS-linux]
+    if: ${{ !cancelled() && needs.prepare-docspaceUS.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos') }}
     runs-on: macos-latest
     strategy:
       matrix:
@@ -417,118 +403,97 @@ jobs:
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
           chunk_id: ${{ matrix.chunk }}
           chunk_size: ${{ needs.prepare-docspaceUS.outputs.chunk_size }}
+          num_chunks: ${{ needs.prepare-docspaceUS.outputs.num_chunks }}
           os_name: macos
           os_config: config_chrome_mac.json
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
           launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-docspaceUS.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
-          branch: ${{ needs.branch-config.outputs.docspaceUS }}
+          branch: ${{ needs.prepare-docspaceUS.outputs.branch }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           test_path: ${{ inputs.test_path }}
           clean: false
           threads: 1
 
-  post-docspaceUS:
-    name: Post - DocSpace US - ${{ matrix.os.name }}
-    needs: [setup, prepare-docspaceUS, run-docspaceUS-windows, run-docspaceUS-linux, run-docspaceUS-macos, branch-config]
-    if: "!cancelled()"
+  post-docspaceUS-windows:
+    name: Post - DocSpace US - windows
+    needs: [prepare-docspaceUS, run-docspaceUS-windows]
+    if: ${{ !cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows') }}
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        os: ${{ fromJson(needs.setup.outputs.matrix).os }}
-      fail-fast: false
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Collect UUIDs
-        id: collect
-        if: needs.prepare-docspaceUS.outputs.num_chunks > 1
-        uses: ./.github/actions/collect-uuids
+      - name: Report DocSpace US - windows
+        uses: ./.github/actions/puppeteer-post
         with:
-          os-name: ${{ matrix.os.name }}
           provider: docspaceUS
+          os_name: windows
+          job_name_prefix: 'DocSpace US'
+          num_chunks: ${{ needs.prepare-docspaceUS.outputs.num_chunks }}
+          launch_name: Daily Tests
+          project_name: ${{ inputs.project_name || 'docsserver-daily' }}
+          api_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          branch: ${{ needs.prepare-docspaceUS.outputs.branch }}
+          read_pat: ${{ secrets.READ_PAT }}
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_TO }}
 
-      - name: Merge Launches
-        id: merge
-        if: needs.prepare-docspaceUS.outputs.num_chunks > 1
-        uses: ./.github/actions/merge-launches
+  post-docspaceUS-linux:
+    name: Post - DocSpace US - linux
+    needs: [prepare-docspaceUS, run-docspaceUS-linux]
+    if: ${{ !cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Report DocSpace US - linux
+        uses: ./.github/actions/puppeteer-post
         with:
-          os-name: ${{ matrix.os.name }}
-          launch-uuids: ${{ steps.collect.outputs.launch_uuids }}
-          api-key: ${{ inputs.api_key || secrets.REPORT_KEY }}
-          project-name: ${{ inputs.project_name || 'docsserver-daily' }}
-          github-token: ${{ secrets.READ_PAT }}
-          branch: ${{ needs.branch-config.outputs.docspaceUS }}
-          launch-name: Daily Tests
+          provider: docspaceUS
+          os_name: linux
+          job_name_prefix: 'DocSpace US'
+          num_chunks: ${{ needs.prepare-docspaceUS.outputs.num_chunks }}
+          launch_name: Daily Tests
+          project_name: ${{ inputs.project_name || 'docsserver-daily' }}
+          api_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          branch: ${{ needs.prepare-docspaceUS.outputs.branch }}
+          read_pat: ${{ secrets.READ_PAT }}
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_TO }}
 
-      - name: Download URL artifact (single chunk)
-        if: needs.prepare-docspaceUS.outputs.num_chunks == '1'
-        uses: actions/download-artifact@v4
+  post-docspaceUS-macos:
+    name: Post - DocSpace US - macos
+    needs: [prepare-docspaceUS, run-docspaceUS-macos]
+    if: ${{ !cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Report DocSpace US - macos
+        uses: ./.github/actions/puppeteer-post
         with:
-          pattern: launch-url-docspaceUS-${{ matrix.os.name }}-chunk-*
-          path: url-artifacts
+          provider: docspaceUS
+          os_name: macos
+          job_name_prefix: 'DocSpace US'
+          num_chunks: ${{ needs.prepare-docspaceUS.outputs.num_chunks }}
+          launch_name: Daily Tests
+          project_name: ${{ inputs.project_name || 'docsserver-daily' }}
+          api_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          branch: ${{ needs.prepare-docspaceUS.outputs.branch }}
+          read_pat: ${{ secrets.READ_PAT }}
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_TO }}
 
-      - name: Get RP URL
-        id: get-rp-url
-        shell: bash
-        run: |
-          if [ "${{ needs.prepare-docspaceUS.outputs.num_chunks }}" == "1" ]; then
-            URL=$(cat url-artifacts/launch-url-docspaceUS-${{ matrix.os.name }}-chunk-*/launch_url.txt 2>/dev/null | head -n 1 | tr -d '[:space:]' || echo "")
-            echo "rp_url=$URL" >> $GITHUB_OUTPUT
-          else
-            echo "rp_url=${{ steps.merge.outputs.rp_launch_url }}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Collect chunk jobs info
-        id: collect-chunks
-        if: always()
-        shell: bash
-        run: |
-          JOBS_JSON=$(gh run view ${{ github.run_id }} --json jobs | jq '.jobs')
-          CHUNKS=$(echo "$JOBS_JSON" | jq -r '[.[] | select(.name | startswith("DocSpace US - ${{ matrix.os.name }}"))] | map({name: .name, status: .status, conclusion: .conclusion, id: .databaseId, url: .url}) | @json')
-          echo "chunks=$CHUNKS" >> $GITHUB_OUTPUT
-        env:
-          GITHUB_TOKEN: ${{ secrets.READ_PAT }}
-
-      - name: Send Telegram notification
-        if: always()
-        shell: bash
-        run: |
-          FAILED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "failure")] | length')
-          CANCELLED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "cancelled")] | length')
-          SUCCESS_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "success")] | length')
-          TOTAL_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq 'length')
-
-          # Report to Telegram only when something is not green; skip on a clean full pass.
-          if [[ "$SUCCESS_COUNT" -eq "$TOTAL_COUNT" && "$TOTAL_COUNT" -gt 0 ]]; then
-            echo "All chunks passed - skipping Telegram notification"
-            exit 0
-          fi
-          if [[ "$FAILED_COUNT" -gt 0 ]]; then
-            OVERALL_STATUS="\u274C Chunks failed (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
-          elif [[ "$CANCELLED_COUNT" -gt 0 ]]; then
-            OVERALL_STATUS="\u26D4 Some chunks cancelled (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
-          elif [[ "$SUCCESS_COUNT" -eq "$TOTAL_COUNT" ]] && [[ "$TOTAL_COUNT" -gt 0 ]]; then
-            OVERALL_STATUS="\u2705 All chunks passed (${TOTAL_COUNT}/${TOTAL_COUNT})"
-          else
-            OVERALL_STATUS="\u2753 Chunks status unknown"
-          fi
-          MESSAGE="\n*Workflow:* ${{ github.workflow }}\n*Provider:* docspaceUS\n*OS:* ${{ matrix.os.name }}\n*Status:* ${OVERALL_STATUS}"
-          MESSAGE="${MESSAGE}\n[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
-          if [[ -n "${{ steps.get-rp-url.outputs.rp_url }}" ]]; then MESSAGE="${MESSAGE}\n[View Report Portal](${{ steps.get-rp-url.outputs.rp_url }})"; fi
-          MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
-            -H "Content-Type: application/json" \
-            -d "{\"chat_id\":\"${{ secrets.TELEGRAM_TO }}\",\"text\":\"$MESSAGE\",\"parse_mode\":\"Markdown\",\"disable_notification\":true,\"disable_web_page_preview\":true}"
-        env:
-          GITHUB_TOKEN: ${{ secrets.READ_PAT }}
 
   prepare-ncoc:
     name: Prepare - NCOC
     needs: [branch-config]
     runs-on: ubuntu-latest
     outputs:
+      branch: ${{ needs.branch-config.outputs.ncoc }}
       matrix: ${{ steps.prepare.outputs.matrix }}
       num_chunks: ${{ steps.prepare.outputs.num_chunks }}
       chunk_size: ${{ steps.prepare.outputs.chunk_size }}
@@ -548,8 +513,8 @@ jobs:
 
   run-ncoc-windows:
     name: NCOC - windows - Chunk ${{ matrix.chunk }}
-    needs: [setup, prepare-ncoc, branch-config, install-deps]
-    if: ${{ !cancelled() && contains(fromJson(needs.setup.outputs.matrix).os.*.name, 'windows') }}
+    needs: [prepare-ncoc, install-deps]
+    if: ${{ !cancelled() && needs.prepare-ncoc.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows') }}
     runs-on: windows-latest
     strategy:
       matrix:
@@ -565,12 +530,13 @@ jobs:
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
           chunk_id: ${{ matrix.chunk }}
           chunk_size: ${{ needs.prepare-ncoc.outputs.chunk_size }}
+          num_chunks: ${{ needs.prepare-ncoc.outputs.num_chunks }}
           os_name: windows
           os_config: config_chrome_win.json
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
           launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-ncoc.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
-          branch: ${{ needs.branch-config.outputs.ncoc }}
+          branch: ${{ needs.prepare-ncoc.outputs.branch }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           test_path: ${{ inputs.test_path }}
           clean: false
@@ -578,8 +544,8 @@ jobs:
 
   run-ncoc-linux:
     name: NCOC - linux - Chunk ${{ matrix.chunk }}
-    needs: [setup, prepare-ncoc, branch-config, install-deps, run-ncoc-windows]
-    if: ${{ !cancelled() && contains(fromJson(needs.setup.outputs.matrix).os.*.name, 'linux') }}
+    needs: [prepare-ncoc, run-ncoc-windows]
+    if: ${{ !cancelled() && needs.prepare-ncoc.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux') }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -595,12 +561,13 @@ jobs:
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
           chunk_id: ${{ matrix.chunk }}
           chunk_size: ${{ needs.prepare-ncoc.outputs.chunk_size }}
+          num_chunks: ${{ needs.prepare-ncoc.outputs.num_chunks }}
           os_name: linux
           os_config: config_chrome_linux.json
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
           launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-ncoc.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
-          branch: ${{ needs.branch-config.outputs.ncoc }}
+          branch: ${{ needs.prepare-ncoc.outputs.branch }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           test_path: ${{ inputs.test_path }}
           clean: false
@@ -608,8 +575,8 @@ jobs:
 
   run-ncoc-macos:
     name: NCOC - macos - Chunk ${{ matrix.chunk }}
-    needs: [setup, prepare-ncoc, branch-config, install-deps, run-ncoc-linux]
-    if: ${{ !cancelled() && contains(fromJson(needs.setup.outputs.matrix).os.*.name, 'macos') }}
+    needs: [prepare-ncoc, run-ncoc-linux]
+    if: ${{ !cancelled() && needs.prepare-ncoc.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos') }}
     runs-on: macos-latest
     strategy:
       matrix:
@@ -625,118 +592,97 @@ jobs:
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
           chunk_id: ${{ matrix.chunk }}
           chunk_size: ${{ needs.prepare-ncoc.outputs.chunk_size }}
+          num_chunks: ${{ needs.prepare-ncoc.outputs.num_chunks }}
           os_name: macos
           os_config: config_chrome_mac.json
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
           launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-ncoc.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
-          branch: ${{ needs.branch-config.outputs.ncoc }}
+          branch: ${{ needs.prepare-ncoc.outputs.branch }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           test_path: ${{ inputs.test_path }}
           clean: false
           threads: 1
 
-  post-ncoc:
-    name: Post - NCOC - ${{ matrix.os.name }}
-    needs: [setup, prepare-ncoc, run-ncoc-windows, run-ncoc-linux, run-ncoc-macos, branch-config]
-    if: "!cancelled()"
+  post-ncoc-windows:
+    name: Post - NCOC - windows
+    needs: [prepare-ncoc, run-ncoc-windows]
+    if: ${{ !cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows') }}
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        os: ${{ fromJson(needs.setup.outputs.matrix).os }}
-      fail-fast: false
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Collect UUIDs
-        id: collect
-        if: needs.prepare-ncoc.outputs.num_chunks > 1
-        uses: ./.github/actions/collect-uuids
+      - name: Report NCOC - windows
+        uses: ./.github/actions/puppeteer-post
         with:
-          os-name: ${{ matrix.os.name }}
           provider: ncoc
+          os_name: windows
+          job_name_prefix: 'NCOC'
+          num_chunks: ${{ needs.prepare-ncoc.outputs.num_chunks }}
+          launch_name: Daily Tests
+          project_name: ${{ inputs.project_name || 'docsserver-daily' }}
+          api_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          branch: ${{ needs.prepare-ncoc.outputs.branch }}
+          read_pat: ${{ secrets.READ_PAT }}
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_TO }}
 
-      - name: Merge Launches
-        id: merge
-        if: needs.prepare-ncoc.outputs.num_chunks > 1
-        uses: ./.github/actions/merge-launches
+  post-ncoc-linux:
+    name: Post - NCOC - linux
+    needs: [prepare-ncoc, run-ncoc-linux]
+    if: ${{ !cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Report NCOC - linux
+        uses: ./.github/actions/puppeteer-post
         with:
-          os-name: ${{ matrix.os.name }}
-          launch-uuids: ${{ steps.collect.outputs.launch_uuids }}
-          api-key: ${{ inputs.api_key || secrets.REPORT_KEY }}
-          project-name: ${{ inputs.project_name || 'docsserver-daily' }}
-          github-token: ${{ secrets.READ_PAT }}
-          branch: ${{ needs.branch-config.outputs.ncoc }}
-          launch-name: Daily Tests
+          provider: ncoc
+          os_name: linux
+          job_name_prefix: 'NCOC'
+          num_chunks: ${{ needs.prepare-ncoc.outputs.num_chunks }}
+          launch_name: Daily Tests
+          project_name: ${{ inputs.project_name || 'docsserver-daily' }}
+          api_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          branch: ${{ needs.prepare-ncoc.outputs.branch }}
+          read_pat: ${{ secrets.READ_PAT }}
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_TO }}
 
-      - name: Download URL artifact (single chunk)
-        if: needs.prepare-ncoc.outputs.num_chunks == '1'
-        uses: actions/download-artifact@v4
+  post-ncoc-macos:
+    name: Post - NCOC - macos
+    needs: [prepare-ncoc, run-ncoc-macos]
+    if: ${{ !cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Report NCOC - macos
+        uses: ./.github/actions/puppeteer-post
         with:
-          pattern: launch-url-ncoc-${{ matrix.os.name }}-chunk-*
-          path: url-artifacts
+          provider: ncoc
+          os_name: macos
+          job_name_prefix: 'NCOC'
+          num_chunks: ${{ needs.prepare-ncoc.outputs.num_chunks }}
+          launch_name: Daily Tests
+          project_name: ${{ inputs.project_name || 'docsserver-daily' }}
+          api_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          branch: ${{ needs.prepare-ncoc.outputs.branch }}
+          read_pat: ${{ secrets.READ_PAT }}
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_TO }}
 
-      - name: Get RP URL
-        id: get-rp-url
-        shell: bash
-        run: |
-          if [ "${{ needs.prepare-ncoc.outputs.num_chunks }}" == "1" ]; then
-            URL=$(cat url-artifacts/launch-url-ncoc-${{ matrix.os.name }}-chunk-*/launch_url.txt 2>/dev/null | head -n 1 | tr -d '[:space:]' || echo "")
-            echo "rp_url=$URL" >> $GITHUB_OUTPUT
-          else
-            echo "rp_url=${{ steps.merge.outputs.rp_launch_url }}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Collect chunk jobs info
-        id: collect-chunks
-        if: always()
-        shell: bash
-        run: |
-          JOBS_JSON=$(gh run view ${{ github.run_id }} --json jobs | jq '.jobs')
-          CHUNKS=$(echo "$JOBS_JSON" | jq -r '[.[] | select(.name | startswith("NCOC - ${{ matrix.os.name }}"))] | map({name: .name, status: .status, conclusion: .conclusion, id: .databaseId, url: .url}) | @json')
-          echo "chunks=$CHUNKS" >> $GITHUB_OUTPUT
-        env:
-          GITHUB_TOKEN: ${{ secrets.READ_PAT }}
-
-      - name: Send Telegram notification
-        if: always()
-        shell: bash
-        run: |
-          FAILED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "failure")] | length')
-          CANCELLED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "cancelled")] | length')
-          SUCCESS_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "success")] | length')
-          TOTAL_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq 'length')
-
-          # Report to Telegram only when something is not green; skip on a clean full pass.
-          if [[ "$SUCCESS_COUNT" -eq "$TOTAL_COUNT" && "$TOTAL_COUNT" -gt 0 ]]; then
-            echo "All chunks passed - skipping Telegram notification"
-            exit 0
-          fi
-          if [[ "$FAILED_COUNT" -gt 0 ]]; then
-            OVERALL_STATUS="\u274C Chunks failed (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
-          elif [[ "$CANCELLED_COUNT" -gt 0 ]]; then
-            OVERALL_STATUS="\u26D4 Some chunks cancelled (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
-          elif [[ "$SUCCESS_COUNT" -eq "$TOTAL_COUNT" ]] && [[ "$TOTAL_COUNT" -gt 0 ]]; then
-            OVERALL_STATUS="\u2705 All chunks passed (${TOTAL_COUNT}/${TOTAL_COUNT})"
-          else
-            OVERALL_STATUS="\u2753 Chunks status unknown"
-          fi
-          MESSAGE="\n*Workflow:* ${{ github.workflow }}\n*Provider:* ncoc\n*OS:* ${{ matrix.os.name }}\n*Status:* ${OVERALL_STATUS}"
-          MESSAGE="${MESSAGE}\n[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
-          if [[ -n "${{ steps.get-rp-url.outputs.rp_url }}" ]]; then MESSAGE="${MESSAGE}\n[View Report Portal](${{ steps.get-rp-url.outputs.rp_url }})"; fi
-          MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
-            -H "Content-Type: application/json" \
-            -d "{\"chat_id\":\"${{ secrets.TELEGRAM_TO }}\",\"text\":\"$MESSAGE\",\"parse_mode\":\"Markdown\",\"disable_notification\":true,\"disable_web_page_preview\":true}"
-        env:
-          GITHUB_TOKEN: ${{ secrets.READ_PAT }}
 
   prepare-ocis:
     name: Prepare - OCIS
     needs: [branch-config]
     runs-on: ubuntu-latest
     outputs:
+      branch: ${{ needs.branch-config.outputs.ocis }}
       matrix: ${{ steps.prepare.outputs.matrix }}
       num_chunks: ${{ steps.prepare.outputs.num_chunks }}
       chunk_size: ${{ steps.prepare.outputs.chunk_size }}
@@ -756,8 +702,8 @@ jobs:
 
   run-ocis-windows:
     name: OCIS - windows - Chunk ${{ matrix.chunk }}
-    needs: [setup, prepare-ocis, branch-config, install-deps]
-    if: ${{ !cancelled() && contains(fromJson(needs.setup.outputs.matrix).os.*.name, 'windows') }}
+    needs: [prepare-ocis, install-deps]
+    if: ${{ !cancelled() && needs.prepare-ocis.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows') }}
     runs-on: windows-latest
     strategy:
       matrix:
@@ -773,12 +719,13 @@ jobs:
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
           chunk_id: ${{ matrix.chunk }}
           chunk_size: ${{ needs.prepare-ocis.outputs.chunk_size }}
+          num_chunks: ${{ needs.prepare-ocis.outputs.num_chunks }}
           os_name: windows
           os_config: config_chrome_win.json
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
           launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-ocis.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
-          branch: ${{ needs.branch-config.outputs.ocis }}
+          branch: ${{ needs.prepare-ocis.outputs.branch }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           test_path: ${{ inputs.test_path }}
           clean: false
@@ -786,8 +733,8 @@ jobs:
 
   run-ocis-linux:
     name: OCIS - linux - Chunk ${{ matrix.chunk }}
-    needs: [setup, prepare-ocis, branch-config, install-deps, run-ocis-windows]
-    if: ${{ !cancelled() && contains(fromJson(needs.setup.outputs.matrix).os.*.name, 'linux') }}
+    needs: [prepare-ocis, run-ocis-windows]
+    if: ${{ !cancelled() && needs.prepare-ocis.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux') }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -803,12 +750,13 @@ jobs:
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
           chunk_id: ${{ matrix.chunk }}
           chunk_size: ${{ needs.prepare-ocis.outputs.chunk_size }}
+          num_chunks: ${{ needs.prepare-ocis.outputs.num_chunks }}
           os_name: linux
           os_config: config_chrome_linux.json
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
           launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-ocis.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
-          branch: ${{ needs.branch-config.outputs.ocis }}
+          branch: ${{ needs.prepare-ocis.outputs.branch }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           test_path: ${{ inputs.test_path }}
           clean: false
@@ -816,8 +764,8 @@ jobs:
 
   run-ocis-macos:
     name: OCIS - macos - Chunk ${{ matrix.chunk }}
-    needs: [setup, prepare-ocis, branch-config, install-deps, run-ocis-linux]
-    if: ${{ !cancelled() && contains(fromJson(needs.setup.outputs.matrix).os.*.name, 'macos') }}
+    needs: [prepare-ocis, run-ocis-linux]
+    if: ${{ !cancelled() && needs.prepare-ocis.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos') }}
     runs-on: macos-latest
     strategy:
       matrix:
@@ -833,117 +781,95 @@ jobs:
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
           chunk_id: ${{ matrix.chunk }}
           chunk_size: ${{ needs.prepare-ocis.outputs.chunk_size }}
+          num_chunks: ${{ needs.prepare-ocis.outputs.num_chunks }}
           os_name: macos
           os_config: config_chrome_mac.json
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
           launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-ocis.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
-          branch: ${{ needs.branch-config.outputs.ocis }}
+          branch: ${{ needs.prepare-ocis.outputs.branch }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           test_path: ${{ inputs.test_path }}
           clean: false
           threads: 1
 
-  post-ocis:
-    name: Post - OCIS - ${{ matrix.os.name }}
-    needs: [setup, prepare-ocis, run-ocis-windows, run-ocis-linux, run-ocis-macos, branch-config]
-    if: "!cancelled()"
+  post-ocis-windows:
+    name: Post - OCIS - windows
+    needs: [prepare-ocis, run-ocis-windows]
+    if: ${{ !cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows') }}
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        os: ${{ fromJson(needs.setup.outputs.matrix).os }}
-      fail-fast: false
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Collect UUIDs
-        id: collect
-        if: needs.prepare-ocis.outputs.num_chunks > 1
-        uses: ./.github/actions/collect-uuids
+      - name: Report OCIS - windows
+        uses: ./.github/actions/puppeteer-post
         with:
-          os-name: ${{ matrix.os.name }}
           provider: ocis
+          os_name: windows
+          job_name_prefix: 'OCIS'
+          num_chunks: ${{ needs.prepare-ocis.outputs.num_chunks }}
+          launch_name: Daily Tests
+          project_name: ${{ inputs.project_name || 'docsserver-daily' }}
+          api_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          branch: ${{ needs.prepare-ocis.outputs.branch }}
+          read_pat: ${{ secrets.READ_PAT }}
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_TO }}
 
-      - name: Merge Launches
-        id: merge
-        if: needs.prepare-ocis.outputs.num_chunks > 1
-        uses: ./.github/actions/merge-launches
+  post-ocis-linux:
+    name: Post - OCIS - linux
+    needs: [prepare-ocis, run-ocis-linux]
+    if: ${{ !cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Report OCIS - linux
+        uses: ./.github/actions/puppeteer-post
         with:
-          os-name: ${{ matrix.os.name }}
-          launch-uuids: ${{ steps.collect.outputs.launch_uuids }}
-          api-key: ${{ inputs.api_key || secrets.REPORT_KEY }}
-          project-name: ${{ inputs.project_name || 'docsserver-daily' }}
-          github-token: ${{ secrets.READ_PAT }}
-          branch: ${{ needs.branch-config.outputs.ocis }}
-          launch-name: Daily Tests
+          provider: ocis
+          os_name: linux
+          job_name_prefix: 'OCIS'
+          num_chunks: ${{ needs.prepare-ocis.outputs.num_chunks }}
+          launch_name: Daily Tests
+          project_name: ${{ inputs.project_name || 'docsserver-daily' }}
+          api_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          branch: ${{ needs.prepare-ocis.outputs.branch }}
+          read_pat: ${{ secrets.READ_PAT }}
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_TO }}
 
-      - name: Download URL artifact (single chunk)
-        if: needs.prepare-ocis.outputs.num_chunks == '1'
-        uses: actions/download-artifact@v4
+  post-ocis-macos:
+    name: Post - OCIS - macos
+    needs: [prepare-ocis, run-ocis-macos]
+    if: ${{ !cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Report OCIS - macos
+        uses: ./.github/actions/puppeteer-post
         with:
-          pattern: launch-url-ocis-${{ matrix.os.name }}-chunk-*
-          path: url-artifacts
+          provider: ocis
+          os_name: macos
+          job_name_prefix: 'OCIS'
+          num_chunks: ${{ needs.prepare-ocis.outputs.num_chunks }}
+          launch_name: Daily Tests
+          project_name: ${{ inputs.project_name || 'docsserver-daily' }}
+          api_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          branch: ${{ needs.prepare-ocis.outputs.branch }}
+          read_pat: ${{ secrets.READ_PAT }}
+          telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
+          telegram_to: ${{ secrets.TELEGRAM_TO }}
 
-      - name: Get RP URL
-        id: get-rp-url
-        shell: bash
-        run: |
-          if [ "${{ needs.prepare-ocis.outputs.num_chunks }}" == "1" ]; then
-            URL=$(cat url-artifacts/launch-url-ocis-${{ matrix.os.name }}-chunk-*/launch_url.txt 2>/dev/null | head -n 1 | tr -d '[:space:]' || echo "")
-            echo "rp_url=$URL" >> $GITHUB_OUTPUT
-          else
-            echo "rp_url=${{ steps.merge.outputs.rp_launch_url }}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Collect chunk jobs info
-        id: collect-chunks
-        if: always()
-        shell: bash
-        run: |
-          JOBS_JSON=$(gh run view ${{ github.run_id }} --json jobs | jq '.jobs')
-          CHUNKS=$(echo "$JOBS_JSON" | jq -r '[.[] | select(.name | startswith("OCIS - ${{ matrix.os.name }}"))] | map({name: .name, status: .status, conclusion: .conclusion, id: .databaseId, url: .url}) | @json')
-          echo "chunks=$CHUNKS" >> $GITHUB_OUTPUT
-        env:
-          GITHUB_TOKEN: ${{ secrets.READ_PAT }}
-
-      - name: Send Telegram notification
-        if: always()
-        shell: bash
-        run: |
-          FAILED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "failure")] | length')
-          CANCELLED_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "cancelled")] | length')
-          SUCCESS_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq '[.[] | select(.conclusion == "success")] | length')
-          TOTAL_COUNT=$(echo '${{ steps.collect-chunks.outputs.chunks }}' | jq 'length')
-
-          # Report to Telegram only when something is not green; skip on a clean full pass.
-          if [[ "$SUCCESS_COUNT" -eq "$TOTAL_COUNT" && "$TOTAL_COUNT" -gt 0 ]]; then
-            echo "All chunks passed - skipping Telegram notification"
-            exit 0
-          fi
-          if [[ "$FAILED_COUNT" -gt 0 ]]; then
-            OVERALL_STATUS="\u274C Chunks failed (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
-          elif [[ "$CANCELLED_COUNT" -gt 0 ]]; then
-            OVERALL_STATUS="\u26D4 Some chunks cancelled (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
-          elif [[ "$SUCCESS_COUNT" -eq "$TOTAL_COUNT" ]] && [[ "$TOTAL_COUNT" -gt 0 ]]; then
-            OVERALL_STATUS="\u2705 All chunks passed (${TOTAL_COUNT}/${TOTAL_COUNT})"
-          else
-            OVERALL_STATUS="\u2753 Chunks status unknown"
-          fi
-          MESSAGE="\n*Workflow:* ${{ github.workflow }}\n*Provider:* ocis\n*OS:* ${{ matrix.os.name }}\n*Status:* ${OVERALL_STATUS}"
-          MESSAGE="${MESSAGE}\n[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
-          if [[ -n "${{ steps.get-rp-url.outputs.rp_url }}" ]]; then MESSAGE="${MESSAGE}\n[View Report Portal](${{ steps.get-rp-url.outputs.rp_url }})"; fi
-          MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendMessage" \
-            -H "Content-Type: application/json" \
-            -d "{\"chat_id\":\"${{ secrets.TELEGRAM_TO }}\",\"text\":\"$MESSAGE\",\"parse_mode\":\"Markdown\",\"disable_notification\":true,\"disable_web_page_preview\":true}"
-        env:
-          GITHUB_TOKEN: ${{ secrets.READ_PAT }}
 
   clean-docspaceEU:
     name: Clean - DocSpace EU
-    needs: [post-docspaceEU, branch-config]
-    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.clean }}
+    needs: [prepare-docspaceEU, post-docspaceEU-windows, post-docspaceEU-linux, post-docspaceEU-macos]
+    if: ${{ !cancelled() && needs.prepare-docspaceEU.result == 'success' && github.event_name == 'workflow_dispatch' && inputs.clean }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -952,13 +878,13 @@ jobs:
         uses: ./.github/actions/puppeteer-clean
         with:
           provider: docspaceEU
-          branch: ${{ needs.branch-config.outputs.docspaceEU }}
+          branch: ${{ needs.prepare-docspaceEU.outputs.branch }}
           read_pat: ${{ secrets.READ_PAT }}
 
   clean-docspaceUS:
     name: Clean - DocSpace US
-    needs: [post-docspaceUS, branch-config]
-    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.clean }}
+    needs: [prepare-docspaceUS, post-docspaceUS-windows, post-docspaceUS-linux, post-docspaceUS-macos]
+    if: ${{ !cancelled() && needs.prepare-docspaceUS.result == 'success' && github.event_name == 'workflow_dispatch' && inputs.clean }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -967,13 +893,13 @@ jobs:
         uses: ./.github/actions/puppeteer-clean
         with:
           provider: docspaceUS
-          branch: ${{ needs.branch-config.outputs.docspaceUS }}
+          branch: ${{ needs.prepare-docspaceUS.outputs.branch }}
           read_pat: ${{ secrets.READ_PAT }}
 
   clean-ncoc:
     name: Clean - NCOC
-    needs: [post-ncoc, branch-config]
-    if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || inputs.clean) }}
+    needs: [prepare-ncoc, post-ncoc-windows, post-ncoc-linux, post-ncoc-macos]
+    if: ${{ !cancelled() && needs.prepare-ncoc.result == 'success' && (github.event_name != 'workflow_dispatch' || inputs.clean) }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -982,13 +908,13 @@ jobs:
         uses: ./.github/actions/puppeteer-clean
         with:
           provider: ncoc
-          branch: ${{ needs.branch-config.outputs.ncoc }}
+          branch: ${{ needs.prepare-ncoc.outputs.branch }}
           read_pat: ${{ secrets.READ_PAT }}
 
   clean-ocis:
     name: Clean - OCIS
-    needs: [post-ocis, branch-config]
-    if: ${{ !cancelled() && (github.event_name != 'workflow_dispatch' || inputs.clean) }}
+    needs: [prepare-ocis, post-ocis-windows, post-ocis-linux, post-ocis-macos]
+    if: ${{ !cancelled() && needs.prepare-ocis.result == 'success' && (github.event_name != 'workflow_dispatch' || inputs.clean) }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -997,5 +923,5 @@ jobs:
         uses: ./.github/actions/puppeteer-clean
         with:
           provider: ocis
-          branch: ${{ needs.branch-config.outputs.ocis }}
+          branch: ${{ needs.prepare-ocis.outputs.branch }}
           read_pat: ${{ secrets.READ_PAT }}

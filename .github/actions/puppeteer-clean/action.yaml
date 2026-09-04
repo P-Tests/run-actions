@@ -74,9 +74,9 @@ runs:
       uses: actions/cache@v5
       with:
         path: ~/.cache/puppeteer
-        key: ${{ runner.os }}-puppeteer-chrome-${{ hashFiles('Dep.Tests/puppeteer/engine/package-lock.json') }}
+        key: ${{ runner.os }}-${{ runner.arch }}-puppeteer-chrome-${{ hashFiles('Dep.Tests/puppeteer/engine/package-lock.json') }}
         restore-keys: |
-          ${{ runner.os }}-puppeteer-chrome-
+          ${{ runner.os }}-${{ runner.arch }}-puppeteer-chrome-
 
     - name: Install Chrome for Puppeteer
       if: steps.cache-puppeteer.outputs.cache-hit != 'true'
@@ -89,11 +89,16 @@ runs:
       shell: bash
       working-directory: Dep.Tests/puppeteer/engine
       # run.py generates engine/descriptions/methodsDescription.json on startup; clearRun needs it to load the provider module tree
-      run: python run.py --count-tests --providers ${{ inputs.provider }} > /dev/null 2>&1 || true
+      env:
+        PROVIDER: ${{ inputs.provider }}
+      run: python run.py --count-tests --providers "$PROVIDER" > /dev/null 2>&1 || true
 
     - name: Clear remote test files
       shell: bash
       working-directory: Dep.Tests/puppeteer/engine
+      env:
+        PROVIDER: ${{ inputs.provider }}
+        OS_CONFIG: ${{ inputs.os_config }}
       run: |
-        echo "Clearing remote files for ${{ inputs.provider }} (after all chunks)"
-        node script/js/scripts/clearRun.js "${{ inputs.provider }}" "../${{ inputs.os_config }}"
+        echo "Clearing remote files for $PROVIDER (after all chunks)"
+        node script/js/scripts/clearRun.js "$PROVIDER" "../$OS_CONFIG"

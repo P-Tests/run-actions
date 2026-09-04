@@ -11,6 +11,9 @@ inputs:
   chunk_size:
     description: 'Size of each chunk'
     required: true
+  num_chunks:
+    description: 'Total chunks in the run; decides which launch artifact the post job consumes'
+    required: true
   suite:
     description: 'Test suite to run (optional)'
     required: false
@@ -128,9 +131,9 @@ runs:
       uses: actions/cache@v5
       with:
         path: ~/.cache/puppeteer
-        key: ${{ runner.os }}-puppeteer-chrome-${{ hashFiles('Dep.Tests/puppeteer/engine/package-lock.json') }}
+        key: ${{ runner.os }}-${{ runner.arch }}-puppeteer-chrome-${{ hashFiles('Dep.Tests/puppeteer/engine/package-lock.json') }}
         restore-keys: |
-          ${{ runner.os }}-puppeteer-chrome-
+          ${{ runner.os }}-${{ runner.arch }}-puppeteer-chrome-
 
     - name: Install Chrome for Puppeteer
       if: steps.cache-puppeteer.outputs.cache-hit != 'true'
@@ -142,18 +145,22 @@ runs:
     - name: Configure Report Portal
       shell: bash
       env:
+        PROJECT_NAME: ${{ inputs.project_name }}
+        OS_NAME: ${{ inputs.os_name }}
+        LAUNCH_NAME_INPUT: ${{ inputs.launch_name }}
         REPORT_API_KEY: ${{ inputs.report_key }}
       run: |
-        LAUNCH_NAME="${{ inputs.launch_name }}"
+        LAUNCH_NAME="$LAUNCH_NAME_INPUT"
         if [ -z "$LAUNCH_NAME" ]; then
-          LAUNCH_NAME="GitHub Actions - ${{ inputs.project_name }} - ${{ inputs.os_name }}"
+          LAUNCH_NAME="GitHub Actions - $PROJECT_NAME - $OS_NAME"
         fi
+        export LAUNCH_NAME
         node -e "
           const fs = require('fs');
           const config = JSON.parse(fs.readFileSync('Dep.Tests/tools/report_portal/config.json', 'utf8'));
           config.api_key = process.env.REPORT_API_KEY;
-          config.project_name = '${{ inputs.project_name }}';
-          config.launch_name = '$LAUNCH_NAME';
+          config.project_name = process.env.PROJECT_NAME;
+          config.launch_name = process.env.LAUNCH_NAME;
           fs.writeFileSync('Dep.Tests/tools/report_portal/config.json', JSON.stringify(config, null, 2));
         "
 
@@ -162,11 +169,12 @@ runs:
       shell: bash
       working-directory: Dep.Tests/puppeteer
       env:
+        OS_CONFIG: ${{ inputs.os_config }}
         SERVER_URL: ${{ inputs.url }}
       run: |
         node -e "
           const fs = require('fs');
-          const file = '${{ inputs.os_config }}';
+          const file = process.env.OS_CONFIG;
           const config = JSON.parse(fs.readFileSync(file, 'utf8'));
           config.testOptions = config.testOptions || {};
           config.testOptions.url = process.env.SERVER_URL + 'example';
@@ -178,7 +186,7 @@ runs:
       if: runner.os == 'Linux'
       shell: bash
       run: |
-        CHROME_DIR=$(find ~/.cache/puppeteer/chrome -name "linux-*" -type d 2>/dev/null | head -n 1)
+        CHROME_DIR=$(find ~/.cache/puppeteer/chrome -name "linux-*" -type d 2>/dev/null | head -n 1 || true)
         if [ -n "$CHROME_DIR" ]; then
           cd "$CHROME_DIR/chrome-linux64/"
           sudo chown root:root chrome_sandbox
@@ -191,30 +199,38 @@ runs:
       id: run-tests
       shell: bash
       working-directory: Dep.Tests/puppeteer/engine
+      env:
+        PROVIDER: ${{ inputs.provider }}
+        CHUNK_ID: ${{ inputs.chunk_id }}
+        CHUNK_SIZE: ${{ inputs.chunk_size }}
+        BRANCH: ${{ inputs.branch }}
+        TEST_PATH: ${{ inputs.test_path }}
+        SUITE: ${{ inputs.suite }}
+        THREADS: ${{ inputs.threads }}
       run: |
         set +e
         TEST_PATH_ARG=""
-        if [ -n "${{ inputs.test_path }}" ]; then
-          TEST_PATH_ARG="${{ inputs.test_path }}"
+        if [ -n "$TEST_PATH" ]; then
+          TEST_PATH_ARG="$TEST_PATH"
         fi
         SUITE_ARG=""
-        if [ -n "${{ inputs.suite }}" ]; then
-          SUITE_ARG="--suite ${{ inputs.suite }}"
+        if [ -n "$SUITE" ]; then
+          SUITE_ARG="--suite $SUITE"
         fi
         THREADS_ARG=""
-        if [ -n "${{ inputs.threads }}" ]; then
-          THREADS_ARG="--threads ${{ inputs.threads }}"
+        if [ -n "$THREADS" ]; then
+          THREADS_ARG="--threads $THREADS"
         fi
         python run.py $TEST_PATH_ARG \
-          --providers ${{ inputs.provider }} \
-          --chunk-id ${{ inputs.chunk_id }} \
-          --chunk-size ${{ inputs.chunk_size }} \
-          --branch "${{ inputs.branch }}" \
+          --providers "$PROVIDER" \
+          --chunk-id "$CHUNK_ID" \
+          --chunk-size "$CHUNK_SIZE" \
+          --branch "$BRANCH" \
           --rerun-failed \
           --disable_animation \
           --config_params puppeteerOptions.headless=true \
           --connect_portal $SUITE_ARG $THREADS_ARG 2>&1 | tee output.log
-        EXIT_CODE=$?
+        EXIT_CODE=${PIPESTATUS[0]}
         set -e
 
         UUID=""
@@ -247,13 +263,17 @@ runs:
       if: ${{ always() && inputs.clean == 'true' }}
       shell: bash
       working-directory: Dep.Tests/puppeteer/engine
+      env:
+        PROVIDER: ${{ inputs.provider }}
+        CHUNK_ID: ${{ inputs.chunk_id }}
+        OS_CONFIG: ${{ inputs.os_config }}
       run: |
-        echo "Clearing remote files for ${{ inputs.provider }} after chunk ${{ inputs.chunk_id }}"
-        node script/js/scripts/clearRun.js "${{ inputs.provider }}" "../${{ inputs.os_config }}" || true
+        echo "Clearing remote files for $PROVIDER after chunk $CHUNK_ID"
+        node script/js/scripts/clearRun.js "$PROVIDER" "../$OS_CONFIG" || true
 
     - name: Upload Launch UUID
-      if: always()
-      uses: actions/upload-artifact@v4
+      if: ${{ always() && inputs.num_chunks != '1' }}
+      uses: actions/upload-artifact@v5
       with:
         name: launch-uuid-${{ inputs.provider }}-${{ inputs.os_name }}-chunk-${{ inputs.chunk_id }}
         path: Dep.Tests/puppeteer/engine/launch_uuid.txt
@@ -261,8 +281,9 @@ runs:
         if-no-files-found: warn
 
     - name: Upload Launch URL
-      if: always()
-      uses: actions/upload-artifact@v4
+      if: ${{ always() && inputs.num_chunks == '1' }}
+      continue-on-error: true
+      uses: actions/upload-artifact@v5
       with:
         name: launch-url-${{ inputs.provider }}-${{ inputs.os_name }}-chunk-${{ inputs.chunk_id }}
         path: Dep.Tests/puppeteer/engine/launch_url.txt
@@ -270,8 +291,8 @@ runs:
         if-no-files-found: warn
 
     - name: Upload test results
-      if: failure()
-      uses: actions/upload-artifact@v4
+      if: ${{ always() && steps.run-tests.outcome == 'failure' }}
+      uses: actions/upload-artifact@v5
       with:
         name: results-${{ inputs.provider }}-${{ inputs.os_name }}-chunk-${{ inputs.chunk_id }}
         path: Dep.Tests/puppeteer/out

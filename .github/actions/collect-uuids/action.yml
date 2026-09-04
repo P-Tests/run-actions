@@ -18,7 +18,7 @@ runs:
   using: 'composite'
   steps:
     - name: Download UUID artifacts
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v5
       with:
         pattern: launch-uuid-${{ inputs.provider }}-${{ inputs.os-name }}-*
         path: uuids
@@ -26,10 +26,13 @@ runs:
     - name: Collect ${{ inputs.os-name }} UUIDs
       id: collect
       shell: bash
+      env:
+        PROVIDER: ${{ inputs.provider }}
+        OS_NAME: ${{ inputs.os-name }}
       run: |
         UUIDS=""
 
-        for file in uuids/launch-uuid-${{ inputs.provider }}-${{ inputs.os-name }}-*/launch_uuid.txt; do
+        for file in uuids/launch-uuid-"$PROVIDER"-"$OS_NAME"-*/launch_uuid.txt; do
           [ -f "$file" ] || continue
 
           UUID=$(tr -d '[:space:]' < "$file")

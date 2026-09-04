@@ -70,9 +70,9 @@ runs:
       uses: actions/cache@v5
       with:
         path: ~/.cache/puppeteer
-        key: ${{ runner.os }}-puppeteer-chrome-${{ hashFiles('Dep.Tests/puppeteer/engine/package-lock.json') }}
+        key: ${{ runner.os }}-${{ runner.arch }}-puppeteer-chrome-${{ hashFiles('Dep.Tests/puppeteer/engine/package-lock.json') }}
         restore-keys: |
-          ${{ runner.os }}-puppeteer-chrome-
+          ${{ runner.os }}-${{ runner.arch }}-puppeteer-chrome-
 
     - name: Install Chrome for Puppeteer
       if: steps.cache-puppeteer.outputs.cache-hit != 'true'
