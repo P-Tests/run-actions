@@ -85,25 +85,35 @@ runs:
       id: set-matrix
       shell: bash
       working-directory: Dep.Tests/puppeteer/engine
+      env:
+        PROVIDER: ${{ inputs.provider }}
+        CHUNK_SIZE: ${{ inputs.chunk_size }}
+        TEST_PATH: ${{ inputs.test_path }}
+        SUITE: ${{ inputs.suite }}
       run: |
-        CHUNK_SIZE="${{ inputs.chunk_size }}"
-
         TEST_PATH_ARG=""
-        if [ -n "${{ inputs.test_path }}" ]; then
-          TEST_PATH_ARG="${{ inputs.test_path }}"
+        if [ -n "$TEST_PATH" ]; then
+          TEST_PATH_ARG="$TEST_PATH"
         fi
         SUITE_ARG=""
-        if [ -n "${{ inputs.suite }}" ]; then
-          SUITE_ARG="--suite ${{ inputs.suite }}"
+        if [ -n "$SUITE" ]; then
+          SUITE_ARG="--suite $SUITE"
         fi
 
         OUTPUT=$(python run.py $TEST_PATH_ARG \
-          --providers ${{ inputs.provider }} \
+          --providers "$PROVIDER" \
           --count-tests \
-          --chunk-size $CHUNK_SIZE $SUITE_ARG)
+          --chunk-size "$CHUNK_SIZE" $SUITE_ARG)
 
-        NUM_CHUNKS=$(echo "$OUTPUT" | grep "num_chunks=" | cut -d'=' -f2)
-        MATRIX=$(echo "$OUTPUT" | grep "matrix=" | cut -d'=' -f2-)
+        NUM_CHUNKS=$(echo "$OUTPUT" | grep "num_chunks=" | cut -d'=' -f2 || true)
+        MATRIX=$(echo "$OUTPUT" | grep "matrix=" | cut -d'=' -f2- || true)
+
+        if ! printf '%s' "$NUM_CHUNKS" | grep -Eq '^[1-9][0-9]*$'; then
+          echo "::error::run.py --count-tests reported no usable num_chunks (got '$NUM_CHUNKS')"
+          echo "--- run.py output ---"
+          echo "$OUTPUT"
+          exit 1
+        fi
 
         echo "num_chunks=$NUM_CHUNKS" >> $GITHUB_OUTPUT
         echo "chunk_size=$CHUNK_SIZE" >> $GITHUB_OUTPUT
