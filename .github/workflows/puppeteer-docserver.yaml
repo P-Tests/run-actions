@@ -58,6 +58,10 @@ on:
         default: ''
         type: string
 
+concurrency:
+  group: puppeteer-docserver
+  cancel-in-progress: false
+
 jobs:
   branch-config:
     name: Resolve branch
