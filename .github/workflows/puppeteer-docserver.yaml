@@ -57,6 +57,11 @@ on:
         required: false
         default: ''
         type: string
+      analyze:
+        description: 'Run the ReportPortal auto-analyzer when the launch is complete'
+        required: false
+        default: true
+        type: boolean
 
 concurrency:
   group: puppeteer-docserver
@@ -181,6 +186,7 @@ jobs:
           clean: ${{ inputs.clean }}
           url: ${{ inputs.url == 'kim' && secrets.URL_RELEASE || secrets.URL_HOTFIX }}
           launch_name: "${{ inputs.launch_name || format('{0}{1}', inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests', needs.prepare.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
+          analyze: ${{ inputs.analyze }}
 
   collect-uuids-windows:
     name: Collect Windows UUIDs
@@ -224,6 +230,7 @@ jobs:
           github-token: ${{ secrets.READ_PAT }}
           branch: ${{ needs.prepare.outputs.branch }}
           launch-name: ${{ inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests' }}
+          analyze: ${{ inputs.analyze }}
 
   run-tests-linux:
     name: Linux - Chunk ${{ matrix.chunk }}
@@ -256,6 +263,7 @@ jobs:
           clean: ${{ inputs.clean }}
           url: ${{ inputs.url == 'kim' && secrets.URL_RELEASE || secrets.URL_HOTFIX }}
           launch_name: "${{ inputs.launch_name || format('{0}{1}', inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests', needs.prepare.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
+          analyze: ${{ inputs.analyze }}
 
   collect-uuids-linux:
     name: Collect Linux UUIDs
@@ -299,6 +307,7 @@ jobs:
           github-token: ${{ secrets.READ_PAT }}
           branch: ${{ needs.prepare.outputs.branch }}
           launch-name: ${{ inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests' }}
+          analyze: ${{ inputs.analyze }}
 
   run-tests-macos:
     name: macOS - Chunk ${{ matrix.chunk }}
@@ -331,6 +340,7 @@ jobs:
           clean: ${{ inputs.clean }}
           url: ${{ inputs.url == 'kim' && secrets.URL_RELEASE || secrets.URL_HOTFIX }}
           launch_name: "${{ inputs.launch_name || format('{0}{1}', inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests', needs.prepare.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
+          analyze: ${{ inputs.analyze }}
 
   collect-uuids-macos:
     name: Collect macOS UUIDs
@@ -374,6 +384,7 @@ jobs:
           github-token: ${{ secrets.READ_PAT }}
           branch: ${{ needs.prepare.outputs.branch }}
           launch-name: ${{ inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests' }}
+          analyze: ${{ inputs.analyze }}
 
   final-summary-windows:
     name: Windows Test Summary
