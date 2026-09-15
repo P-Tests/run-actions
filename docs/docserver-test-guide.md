@@ -107,6 +107,27 @@ The ReportPortal access key.
 
 Leave empty unless a different key is required.
 
+## 11. Run the ReportPortal auto-analyzer (default on)
+
+Starts the ReportPortal auto-analyzer as soon as the launch is complete, so the failures do
+not have to be analyzed by hand. The analyzer compares them with the history of launches
+with the same name and assigns the known defect types automatically.
+
+It runs inside the job that completes the launch: the *Merge ... Launches* job right after
+the merge, or - when the whole run fits into a single chunk and there is nothing to merge -
+the chunk job itself, after the tests. The job only starts the analysis; ReportPortal
+performs it in the background, so nothing waits for the result.
+
+The settings match the defaults of the *Analyze Launches* dialog in ReportPortal: the base is
+*Current and all previous launches with the same name*, and all three kinds of items are
+analyzed (to investigate, analyzed automatically, analyzed manually). The rest - similarity
+thresholds, indexed log lines - comes from the project's *Settings - Auto-Analysis* page.
+
+- On: every complete launch is sent to the analyzer.
+- Off: launches are left unanalyzed; they can still be analyzed manually in ReportPortal.
+
+A failure to start the analysis is reported as a warning and does not fail the run.
+
 ## Typical run
 
 1. **Use workflow from**: `master`.
@@ -144,3 +165,4 @@ The **Daily** and **SaaS Hourly** workflows are structured similarly, with two d
   from its own config, not from the stand secrets.
 - They run on a schedule (cron) and can also be started manually via *Run workflow* with
   the same fields (operating system, test path, chunk size, clean, ReportPortal fields).
+- The auto-analyzer runs there as well, always on, in the same job that completes the launch.

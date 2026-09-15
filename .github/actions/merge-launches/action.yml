@@ -25,6 +25,10 @@ inputs:
     description: 'Dep.Tests branch to checkout'
     required: false
     default: 'master'
+  analyze:
+    description: 'Run the Report Portal auto-analyzer on the merged launch'
+    required: false
+    default: 'true'
 
 outputs:
   rp_launch_url:
@@ -74,6 +78,7 @@ runs:
         LAUNCH_NAME: ${{ inputs.launch-name }}
         UUIDS_JSON: ${{ inputs.launch-uuids }}
         REPORT_API_KEY: ${{ inputs.api-key }}
+        ANALYZE: ${{ inputs.analyze }}
       run: |
         node -e "
           const fs = require('fs');
@@ -120,5 +125,16 @@ runs:
         RP_URL=$(grep -oP 'RP_LAUNCH_URL=\K.*' merge_output.log 2>/dev/null | tail -n 1 || echo "")
         echo "rp_url=$RP_URL" >> $GITHUB_OUTPUT
 
+        # A merge produces one launch per platform - the analyzer needs every one of them,
+        # and a launch URL ends with the id of its launch.
+        RP_IDS=$(grep -oP 'RP_LAUNCH_URL=\S*/\K\d+' merge_output.log 2>/dev/null | tr '\n' ' ' || echo "")
+
         rm -f merge_output.log
+
+        if [ "$EXIT_CODE" -eq 0 ] && [ "$ANALYZE" = "true" ] && [ -n "$(echo "$RP_IDS" | tr -d '[:space:]')" ]; then
+          echo "Starting the analyzer for merged launch(es) of $OS_NAME: $RP_IDS"
+          python analyze_launches.py --launch-ids $RP_IDS \
+            || echo "::warning::Failed to start the Report Portal analysis for $OS_NAME, continuing"
+        fi
+
         exit $EXIT_CODE

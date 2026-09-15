@@ -57,6 +57,10 @@ inputs:
     description: 'Server URL to test against (optional; overrides testOptions.url in the OS config when set)'
     required: false
     default: ''
+  analyze:
+    description: 'Run the Report Portal auto-analyzer on the launch - only for a single-chunk run, a chunked run is analyzed after the merge'
+    required: false
+    default: 'true'
 
 outputs:
   uuid:
@@ -270,6 +274,27 @@ runs:
       run: |
         echo "Clearing remote files for $PROVIDER after chunk $CHUNK_ID"
         node script/js/scripts/clearRun.js "$PROVIDER" "../$OS_CONFIG" || true
+
+    - name: Analyze Launch
+      if: ${{ always() && inputs.analyze == 'true' && inputs.num_chunks == '1' && steps.run-tests.outputs.rp_url != '' }}
+      shell: bash
+      working-directory: Dep.Tests/tools/report_portal
+      env:
+        RP_URL: ${{ steps.run-tests.outputs.rp_url }}
+      run: |
+        # A chunked run is analyzed once the launches are merged; a single launch is complete right here.
+        LAUNCH_ID=""
+        if [[ "$RP_URL" =~ /([0-9]+)$ ]]; then
+          LAUNCH_ID="${BASH_REMATCH[1]}"
+        fi
+
+        if [ -z "$LAUNCH_ID" ]; then
+          echo "No launch id in '$RP_URL', skipping analysis"
+          exit 0
+        fi
+
+        echo "Starting the analyzer for launch $LAUNCH_ID"
+        python analyze_launches.py --launch-ids "$LAUNCH_ID" || echo "::warning::Failed to start the Report Portal analysis, continuing"
 
     - name: Upload Launch UUID
       if: ${{ always() && inputs.num_chunks != '1' }}
