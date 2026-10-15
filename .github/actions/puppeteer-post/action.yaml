@@ -1,5 +1,5 @@
 name: 'Puppeteer Post'
-description: 'Resolve the Report Portal launch URL for one provider/OS and report the chunk outcome to Telegram'
+description: 'Finish the Report Portal launch of one provider/OS and report the chunk outcome to Telegram'
 
 inputs:
   provider:
@@ -11,19 +11,16 @@ inputs:
   job_name_prefix:
     description: 'Display-name prefix of the chunk jobs for this provider, e.g. "DocSpace EU"'
     required: true
-  num_chunks:
-    description: 'Total chunks in the run; decides whether launches are merged or a single URL is reused'
-    required: true
-  launch_name:
-    description: 'Name for the merged Report Portal launch'
-    required: false
-    default: 'Github Action All Tests'
   project_name:
     description: 'Report Portal project name'
     required: true
   api_key:
     description: 'Report Portal API key'
     required: true
+  analyze:
+    description: 'Run the Report Portal auto-analyzer on the finished launch'
+    required: false
+    default: 'true'
   branch:
     description: 'Dep.Tests branch to checkout'
     required: false
@@ -41,50 +38,17 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Collect UUIDs
-      id: collect
-      if: ${{ inputs.num_chunks > 1 }}
-      uses: ./.github/actions/collect-uuids
+    - name: Finish launch
+      id: finish
+      uses: ./.github/actions/rp-finish-launch
       with:
-        os-name: ${{ inputs.os_name }}
         provider: ${{ inputs.provider }}
-
-    - name: Merge Launches
-      id: merge
-      if: ${{ inputs.num_chunks > 1 }}
-      uses: ./.github/actions/merge-launches
-      with:
-        os-name: ${{ inputs.os_name }}
-        launch-uuids: ${{ steps.collect.outputs.launch_uuids }}
-        api-key: ${{ inputs.api_key }}
-        project-name: ${{ inputs.project_name }}
-        github-token: ${{ inputs.read_pat }}
+        os_name: ${{ inputs.os_name }}
+        project_name: ${{ inputs.project_name }}
+        api_key: ${{ inputs.api_key }}
         branch: ${{ inputs.branch }}
-        launch-name: ${{ inputs.launch_name }}
-
-    - name: Download URL artifact (single chunk)
-      if: ${{ inputs.num_chunks == '1' }}
-      continue-on-error: true
-      uses: actions/download-artifact@v5
-      with:
-        pattern: launch-url-${{ inputs.provider }}-${{ inputs.os_name }}-chunk-*
-        path: url-artifacts
-
-    - name: Get RP URL
-      id: get-rp-url
-      shell: bash
-      env:
-        NUM_CHUNKS: ${{ inputs.num_chunks }}
-        PROVIDER: ${{ inputs.provider }}
-        OS_NAME: ${{ inputs.os_name }}
-        MERGED_RP_URL: ${{ steps.merge.outputs.rp_launch_url }}
-      run: |
-        if [ "$NUM_CHUNKS" == "1" ]; then
-          URL=$(cat url-artifacts/launch-url-"$PROVIDER"-"$OS_NAME"-chunk-*/launch_url.txt 2>/dev/null | head -n 1 | tr -d '[:space:]' || echo "")
-          echo "rp_url=$URL" >> $GITHUB_OUTPUT
-        else
-          echo "rp_url=$MERGED_RP_URL" >> $GITHUB_OUTPUT
-        fi
+        read_pat: ${{ inputs.read_pat }}
+        analyze: ${{ inputs.analyze }}
 
     - name: Collect chunk jobs info
       id: collect-chunks
@@ -101,7 +65,7 @@ runs:
         GITHUB_TOKEN: ${{ inputs.read_pat }}
 
     - name: Send Telegram notification
-      if: always()
+      if: ${{ always() && !cancelled() }}
       shell: bash
       run: |
         FAILED_COUNT=$(echo "$CHUNKS_JSON" | jq '[.[] | select(.conclusion == "failure")] | length')
@@ -136,7 +100,7 @@ runs:
         CHUNKS_JSON: ${{ steps.collect-chunks.outputs.chunks }}
         PROVIDER: ${{ inputs.provider }}
         OS_NAME: ${{ inputs.os_name }}
-        RP_URL: ${{ steps.get-rp-url.outputs.rp_url }}
+        RP_URL: ${{ steps.finish.outputs.rp_launch_url }}
         TELEGRAM_TOKEN: ${{ inputs.telegram_token }}
         TELEGRAM_TO: ${{ inputs.telegram_to }}
         GITHUB_TOKEN: ${{ inputs.read_pat }}

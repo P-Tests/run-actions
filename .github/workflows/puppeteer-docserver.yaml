@@ -155,10 +155,34 @@ jobs:
         with:
           read_pat: ${{ secrets.READ_PAT }}
 
+  start-launch-windows:
+    name: Start Windows Launch
+    needs: [prepare]
+    if: "!cancelled() && needs.prepare.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows')"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Start launch
+        uses: ./.github/actions/rp-start-launch
+        with:
+          provider: example
+          os_name: windows
+          os_config: config_chrome_win.json
+          project_name: ${{ inputs.project_name || 'docsserver' }}
+          launch_name: ${{ inputs.launch_name || (inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests') }}
+          read_pat: ${{ secrets.READ_PAT }}
+          report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          branch: ${{ needs.prepare.outputs.branch }}
+          test_path: ${{ inputs.test_path }}
+          url: ${{ inputs.url == 'kim' && secrets.URL_RELEASE || secrets.URL_HOTFIX }}
+
   run-tests-windows:
     name: Windows - Chunk ${{ matrix.chunk }}
-    needs: [prepare, install-deps-windows]
-    if: "!cancelled() && needs.prepare.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows')"
+    needs: [prepare, install-deps-windows, start-launch-windows]
+    if: "!cancelled() && needs.start-launch-windows.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows')"
     runs-on: windows-latest
     strategy:
       matrix:
@@ -175,7 +199,6 @@ jobs:
           provider: example
           chunk_id: ${{ matrix.chunk }}
           chunk_size: ${{ needs.prepare.outputs.chunk_size }}
-          num_chunks: ${{ needs.prepare.outputs.num_chunks }}
           os_name: windows
           os_config: config_chrome_win.json
           project_name: ${{ inputs.project_name || 'docsserver' }}
@@ -185,57 +208,59 @@ jobs:
           test_path: ${{ inputs.test_path }}
           clean: ${{ inputs.clean }}
           url: ${{ inputs.url == 'kim' && secrets.URL_RELEASE || secrets.URL_HOTFIX }}
-          launch_name: "${{ inputs.launch_name || format('{0}{1}', inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests', needs.prepare.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
-          analyze: ${{ inputs.analyze }}
 
-  collect-uuids-windows:
-    name: Collect Windows UUIDs
-    needs: [prepare, run-tests-windows]
+  finish-launch-windows:
+    name: Finish Windows Launch
+    needs: [prepare, start-launch-windows, run-tests-windows]
     runs-on: ubuntu-latest
-    if: "!cancelled() && needs.prepare.outputs.num_chunks > 1 && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows')"
+    if: "always() && needs.start-launch-windows.result == 'success'"
     outputs:
-      launch_uuids: ${{ steps.collect.outputs.launch_uuids }}
+      rp_launch_url: ${{ steps.finish.outputs.rp_launch_url }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Collect UUIDs
-        id: collect
-        uses: ./.github/actions/collect-uuids
+      - name: Finish launch
+        id: finish
+        uses: ./.github/actions/rp-finish-launch
         with:
-          os-name: windows
           provider: example
+          os_name: windows
+          project_name: ${{ inputs.project_name || 'docsserver' }}
+          api_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          read_pat: ${{ secrets.READ_PAT }}
+          branch: ${{ needs.prepare.outputs.branch }}
+          analyze: ${{ inputs.analyze }}
 
-  merge-launches-windows:
-    name: Merge Windows Launches
-    needs: [prepare, collect-uuids-windows]
+  start-launch-linux:
+    name: Start Linux Launch
+    needs: [prepare]
+    if: "!cancelled() && needs.prepare.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux')"
     runs-on: ubuntu-latest
-    if: "!cancelled() && needs.prepare.outputs.num_chunks > 1 && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows')"
-    outputs:
-      rp_launch_url: ${{ steps.merge.outputs.rp_launch_url }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Merge Launches
-        id: merge
-        uses: ./.github/actions/merge-launches
+      - name: Start launch
+        uses: ./.github/actions/rp-start-launch
         with:
-          os-name: windows
-          launch-uuids: ${{ needs.collect-uuids-windows.outputs.launch_uuids }}
-          api-key: ${{ inputs.api_key || secrets.REPORT_KEY }}
-          project-name: ${{ inputs.project_name || 'docsserver' }}
-          github-token: ${{ secrets.READ_PAT }}
+          provider: example
+          os_name: linux
+          os_config: config_chrome_linux.json
+          project_name: ${{ inputs.project_name || 'docsserver' }}
+          launch_name: ${{ inputs.launch_name || (inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests') }}
+          read_pat: ${{ secrets.READ_PAT }}
+          report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           branch: ${{ needs.prepare.outputs.branch }}
-          launch-name: ${{ inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests' }}
-          analyze: ${{ inputs.analyze }}
+          test_path: ${{ inputs.test_path }}
+          url: ${{ inputs.url == 'kim' && secrets.URL_RELEASE || secrets.URL_HOTFIX }}
 
   run-tests-linux:
     name: Linux - Chunk ${{ matrix.chunk }}
-    needs: [prepare, install-deps-linux]
-    if: "!cancelled() && needs.prepare.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux')"
+    needs: [prepare, install-deps-linux, start-launch-linux]
+    if: "!cancelled() && needs.start-launch-linux.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux')"
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -252,7 +277,6 @@ jobs:
           provider: example
           chunk_id: ${{ matrix.chunk }}
           chunk_size: ${{ needs.prepare.outputs.chunk_size }}
-          num_chunks: ${{ needs.prepare.outputs.num_chunks }}
           os_name: linux
           os_config: config_chrome_linux.json
           project_name: ${{ inputs.project_name || 'docsserver' }}
@@ -262,57 +286,59 @@ jobs:
           test_path: ${{ inputs.test_path }}
           clean: ${{ inputs.clean }}
           url: ${{ inputs.url == 'kim' && secrets.URL_RELEASE || secrets.URL_HOTFIX }}
-          launch_name: "${{ inputs.launch_name || format('{0}{1}', inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests', needs.prepare.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
-          analyze: ${{ inputs.analyze }}
 
-  collect-uuids-linux:
-    name: Collect Linux UUIDs
-    needs: [prepare, run-tests-linux]
+  finish-launch-linux:
+    name: Finish Linux Launch
+    needs: [prepare, start-launch-linux, run-tests-linux]
     runs-on: ubuntu-latest
-    if: "!cancelled() && needs.prepare.outputs.num_chunks > 1 && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux')"
+    if: "always() && needs.start-launch-linux.result == 'success'"
     outputs:
-      launch_uuids: ${{ steps.collect.outputs.launch_uuids }}
+      rp_launch_url: ${{ steps.finish.outputs.rp_launch_url }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Collect UUIDs
-        id: collect
-        uses: ./.github/actions/collect-uuids
+      - name: Finish launch
+        id: finish
+        uses: ./.github/actions/rp-finish-launch
         with:
-          os-name: linux
           provider: example
+          os_name: linux
+          project_name: ${{ inputs.project_name || 'docsserver' }}
+          api_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          read_pat: ${{ secrets.READ_PAT }}
+          branch: ${{ needs.prepare.outputs.branch }}
+          analyze: ${{ inputs.analyze }}
 
-  merge-launches-linux:
-    name: Merge Linux Launches
-    needs: [prepare, collect-uuids-linux]
+  start-launch-macos:
+    name: Start macOS Launch
+    needs: [prepare]
+    if: "!cancelled() && needs.prepare.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos')"
     runs-on: ubuntu-latest
-    if: "!cancelled() && needs.prepare.outputs.num_chunks > 1 && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux')"
-    outputs:
-      rp_launch_url: ${{ steps.merge.outputs.rp_launch_url }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Merge Launches
-        id: merge
-        uses: ./.github/actions/merge-launches
+      - name: Start launch
+        uses: ./.github/actions/rp-start-launch
         with:
-          os-name: linux
-          launch-uuids: ${{ needs.collect-uuids-linux.outputs.launch_uuids }}
-          api-key: ${{ inputs.api_key || secrets.REPORT_KEY }}
-          project-name: ${{ inputs.project_name || 'docsserver' }}
-          github-token: ${{ secrets.READ_PAT }}
+          provider: example
+          os_name: macos
+          os_config: config_chrome_mac.json
+          project_name: ${{ inputs.project_name || 'docsserver' }}
+          launch_name: ${{ inputs.launch_name || (inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests') }}
+          read_pat: ${{ secrets.READ_PAT }}
+          report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           branch: ${{ needs.prepare.outputs.branch }}
-          launch-name: ${{ inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests' }}
-          analyze: ${{ inputs.analyze }}
+          test_path: ${{ inputs.test_path }}
+          url: ${{ inputs.url == 'kim' && secrets.URL_RELEASE || secrets.URL_HOTFIX }}
 
   run-tests-macos:
     name: macOS - Chunk ${{ matrix.chunk }}
-    needs: [prepare, install-deps-macos]
-    if: "!cancelled() && needs.prepare.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos')"
+    needs: [prepare, install-deps-macos, start-launch-macos]
+    if: "!cancelled() && needs.start-launch-macos.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos')"
     runs-on: macos-latest
     strategy:
       matrix:
@@ -329,7 +355,6 @@ jobs:
           provider: example
           chunk_id: ${{ matrix.chunk }}
           chunk_size: ${{ needs.prepare.outputs.chunk_size }}
-          num_chunks: ${{ needs.prepare.outputs.num_chunks }}
           os_name: macos
           os_config: config_chrome_mac.json
           project_name: ${{ inputs.project_name || 'docsserver' }}
@@ -339,80 +364,40 @@ jobs:
           test_path: ${{ inputs.test_path }}
           clean: ${{ inputs.clean }}
           url: ${{ inputs.url == 'kim' && secrets.URL_RELEASE || secrets.URL_HOTFIX }}
-          launch_name: "${{ inputs.launch_name || format('{0}{1}', inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests', needs.prepare.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
-          analyze: ${{ inputs.analyze }}
 
-  collect-uuids-macos:
-    name: Collect macOS UUIDs
-    needs: [prepare, run-tests-macos]
+  finish-launch-macos:
+    name: Finish macOS Launch
+    needs: [prepare, start-launch-macos, run-tests-macos]
     runs-on: ubuntu-latest
-    if: "!cancelled() && needs.prepare.outputs.num_chunks > 1 && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos')"
+    if: "always() && needs.start-launch-macos.result == 'success'"
     outputs:
-      launch_uuids: ${{ steps.collect.outputs.launch_uuids }}
+      rp_launch_url: ${{ steps.finish.outputs.rp_launch_url }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Collect UUIDs
-        id: collect
-        uses: ./.github/actions/collect-uuids
+      - name: Finish launch
+        id: finish
+        uses: ./.github/actions/rp-finish-launch
         with:
-          os-name: macos
           provider: example
-
-  merge-launches-macos:
-    name: Merge macOS Launches
-    needs: [prepare, collect-uuids-macos]
-    runs-on: ubuntu-latest
-    if: "!cancelled() && needs.prepare.outputs.num_chunks > 1 && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos')"
-    outputs:
-      rp_launch_url: ${{ steps.merge.outputs.rp_launch_url }}
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Merge Launches
-        id: merge
-        uses: ./.github/actions/merge-launches
-        with:
-          os-name: macos
-          launch-uuids: ${{ needs.collect-uuids-macos.outputs.launch_uuids }}
-          api-key: ${{ inputs.api_key || secrets.REPORT_KEY }}
-          project-name: ${{ inputs.project_name || 'docsserver' }}
-          github-token: ${{ secrets.READ_PAT }}
+          os_name: macos
+          project_name: ${{ inputs.project_name || 'docsserver' }}
+          api_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          read_pat: ${{ secrets.READ_PAT }}
           branch: ${{ needs.prepare.outputs.branch }}
-          launch-name: ${{ inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests' }}
           analyze: ${{ inputs.analyze }}
 
   final-summary-windows:
     name: Windows Test Summary
-    needs: [prepare, merge-launches-windows]
+    needs: [prepare, finish-launch-windows]
     runs-on: ubuntu-latest
     if: "!cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows')"
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
-
-      - name: Download URL artifact (single chunk)
-        if: needs.prepare.outputs.num_chunks == '1'
-        uses: actions/download-artifact@v5
-        with:
-          pattern: launch-url-example-windows-chunk-*
-          path: url-artifacts
-
-      - name: Get RP URL
-        id: get-rp-url
-        shell: bash
-        run: |
-          if [ "${{ needs.prepare.outputs.num_chunks }}" == "1" ]; then
-            URL=$(cat url-artifacts/launch-url-example-windows-chunk-*/launch_url.txt 2>/dev/null | head -n 1 | tr -d '[:space:]' || echo "")
-            echo "rp_url=$URL" >> $GITHUB_OUTPUT
-          else
-            echo "rp_url=${{ needs.merge-launches-windows.outputs.rp_launch_url }}" >> $GITHUB_OUTPUT
-          fi
 
       - name: Collect Windows chunk jobs info
         id: collect-chunks
@@ -424,9 +409,6 @@ jobs:
 
           CHUNKS=$(echo "$JOBS_JSON" | jq -r '[.[] | select(.name | startswith("Windows - Chunk"))] | map({name: .name, status: .status, conclusion: .conclusion, id: .databaseId, url: .url}) | @json')
           echo "chunks=$CHUNKS" >> $GITHUB_OUTPUT
-
-          MERGE_URL=$(echo "$JOBS_JSON" | jq -r '.[] | select(.name == "Merge Windows Launches") | .url')
-          echo "merge_url=$MERGE_URL" >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.READ_PAT }}
 
@@ -435,8 +417,7 @@ jobs:
         shell: bash
         env:
           CHUNKS_JSON: ${{ steps.collect-chunks.outputs.chunks }}
-          MERGE_URL: ${{ steps.collect-chunks.outputs.merge_url }}
-          RP_URL: ${{ steps.get-rp-url.outputs.rp_url }}
+          RP_URL: ${{ needs.finish-launch-windows.outputs.rp_launch_url }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
         run: |
@@ -472,10 +453,6 @@ jobs:
           MESSAGE="${MESSAGE}\n*Status:* ${OVERALL_STATUS}"
           MESSAGE="${MESSAGE}\n"
 
-          if [[ "${{ needs.prepare.outputs.num_chunks }}" -gt 1 ]]; then
-            MESSAGE="${MESSAGE}\n[View Merge Job](${MERGE_URL})"
-          fi
-
           MESSAGE="${MESSAGE}\n[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
 
           if [[ -n "$RP_URL" ]]; then
@@ -496,31 +473,13 @@ jobs:
 
   final-summary-linux:
     name: Linux Test Summary
-    needs: [prepare, merge-launches-linux]
+    needs: [prepare, finish-launch-linux]
     runs-on: ubuntu-latest
     if: "!cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux')"
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
-
-      - name: Download URL artifact (single chunk)
-        if: needs.prepare.outputs.num_chunks == '1'
-        uses: actions/download-artifact@v5
-        with:
-          pattern: launch-url-example-linux-chunk-*
-          path: url-artifacts
-
-      - name: Get RP URL
-        id: get-rp-url
-        shell: bash
-        run: |
-          if [ "${{ needs.prepare.outputs.num_chunks }}" == "1" ]; then
-            URL=$(cat url-artifacts/launch-url-example-linux-chunk-*/launch_url.txt 2>/dev/null | head -n 1 | tr -d '[:space:]' || echo "")
-            echo "rp_url=$URL" >> $GITHUB_OUTPUT
-          else
-            echo "rp_url=${{ needs.merge-launches-linux.outputs.rp_launch_url }}" >> $GITHUB_OUTPUT
-          fi
 
       - name: Collect Linux chunk jobs info
         id: collect-chunks
@@ -532,9 +491,6 @@ jobs:
 
           CHUNKS=$(echo "$JOBS_JSON" | jq -r '[.[] | select(.name | startswith("Linux - Chunk"))] | map({name: .name, status: .status, conclusion: .conclusion, id: .databaseId, url: .url}) | @json')
           echo "chunks=$CHUNKS" >> $GITHUB_OUTPUT
-
-          MERGE_URL=$(echo "$JOBS_JSON" | jq -r '.[] | select(.name == "Merge Linux Launches") | .url')
-          echo "merge_url=$MERGE_URL" >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.READ_PAT }}
 
@@ -543,8 +499,7 @@ jobs:
         shell: bash
         env:
           CHUNKS_JSON: ${{ steps.collect-chunks.outputs.chunks }}
-          MERGE_URL: ${{ steps.collect-chunks.outputs.merge_url }}
-          RP_URL: ${{ steps.get-rp-url.outputs.rp_url }}
+          RP_URL: ${{ needs.finish-launch-linux.outputs.rp_launch_url }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
         run: |
@@ -580,10 +535,6 @@ jobs:
           MESSAGE="${MESSAGE}\n*Status:* ${OVERALL_STATUS}"
           MESSAGE="${MESSAGE}\n"
 
-          if [[ "${{ needs.prepare.outputs.num_chunks }}" -gt 1 ]]; then
-            MESSAGE="${MESSAGE}\n[View Merge Job](${MERGE_URL})"
-          fi
-
           MESSAGE="${MESSAGE}\n[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
 
           if [[ -n "$RP_URL" ]]; then
@@ -604,31 +555,13 @@ jobs:
 
   final-summary-macos:
     name: macOS Test Summary
-    needs: [prepare, merge-launches-macos]
+    needs: [prepare, finish-launch-macos]
     runs-on: ubuntu-latest
     if: "!cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos')"
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
-
-      - name: Download URL artifact (single chunk)
-        if: needs.prepare.outputs.num_chunks == '1'
-        uses: actions/download-artifact@v5
-        with:
-          pattern: launch-url-example-macos-chunk-*
-          path: url-artifacts
-
-      - name: Get RP URL
-        id: get-rp-url
-        shell: bash
-        run: |
-          if [ "${{ needs.prepare.outputs.num_chunks }}" == "1" ]; then
-            URL=$(cat url-artifacts/launch-url-example-macos-chunk-*/launch_url.txt 2>/dev/null | head -n 1 | tr -d '[:space:]' || echo "")
-            echo "rp_url=$URL" >> $GITHUB_OUTPUT
-          else
-            echo "rp_url=${{ needs.merge-launches-macos.outputs.rp_launch_url }}" >> $GITHUB_OUTPUT
-          fi
 
       - name: Collect macOS chunk jobs info
         id: collect-chunks
@@ -640,9 +573,6 @@ jobs:
 
           CHUNKS=$(echo "$JOBS_JSON" | jq -r '[.[] | select(.name | startswith("macOS - Chunk"))] | map({name: .name, status: .status, conclusion: .conclusion, id: .databaseId, url: .url}) | @json')
           echo "chunks=$CHUNKS" >> $GITHUB_OUTPUT
-
-          MERGE_URL=$(echo "$JOBS_JSON" | jq -r '.[] | select(.name == "Merge macOS Launches") | .url')
-          echo "merge_url=$MERGE_URL" >> $GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.READ_PAT }}
 
@@ -651,8 +581,7 @@ jobs:
         shell: bash
         env:
           CHUNKS_JSON: ${{ steps.collect-chunks.outputs.chunks }}
-          MERGE_URL: ${{ steps.collect-chunks.outputs.merge_url }}
-          RP_URL: ${{ steps.get-rp-url.outputs.rp_url }}
+          RP_URL: ${{ needs.finish-launch-macos.outputs.rp_launch_url }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
         run: |
@@ -687,10 +616,6 @@ jobs:
           MESSAGE="${MESSAGE}\n*Stand:* ${{ github.event.inputs.url }}"
           MESSAGE="${MESSAGE}\n*Status:* ${OVERALL_STATUS}"
           MESSAGE="${MESSAGE}\n"
-
-          if [[ "${{ needs.prepare.outputs.num_chunks }}" -gt 1 ]]; then
-            MESSAGE="${MESSAGE}\n[View Merge Job](${MERGE_URL})"
-          fi
 
           MESSAGE="${MESSAGE}\n[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
 

@@ -1,0 +1,105 @@
+name: 'Report Portal Finish Launch'
+description: 'Finish the Report Portal launch the chunks of one provider/OS reported into, and start its analysis'
+
+inputs:
+  provider:
+    description: 'Provider name (e.g. docspaceEU, ncoc, ocis)'
+    required: true
+  os_name:
+    description: 'Operating system name (windows, linux, macos)'
+    required: true
+  project_name:
+    description: 'Report Portal project name'
+    required: true
+  api_key:
+    description: 'Report Portal API key'
+    required: true
+  branch:
+    description: 'Dep.Tests branch to checkout'
+    required: false
+    default: 'master'
+  read_pat:
+    description: 'GitHub PAT for private repository access'
+    required: true
+  analyze:
+    description: 'Run the Report Portal auto-analyzer on the finished launch'
+    required: false
+    default: 'true'
+
+outputs:
+  rp_launch_url:
+    description: 'ReportPortal launch URL'
+    value: ${{ steps.finish.outputs.rp_url }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout Dep.Tests repository
+      uses: actions/checkout@v7
+      with:
+        repository: ONLYOFFICE-data/Dep.Tests
+        path: Dep.Tests
+        sparse-checkout: |
+          puppeteer
+          tools
+        token: ${{ inputs.read_pat }}
+        ref: ${{ inputs.branch }}
+        submodules: false
+
+    - name: Cache Python 3.10 toolcache
+      uses: actions/cache@v5
+      with:
+        path: ${{ runner.tool_cache }}/Python/3.10.*
+        key: ${{ runner.os }}-${{ runner.arch }}-toolcache-python-3.10
+
+    - name: Set up Python
+      uses: actions/setup-python@v6
+      with:
+        python-version: '3.10'
+
+    - name: Cache Report Portal client
+      id: cache-rp-modules
+      uses: actions/cache@v5
+      with:
+        path: Dep.Tests/tools/report_portal/pip_modules
+        key: ${{ runner.os }}-${{ runner.arch }}-rp-modules-${{ hashFiles('Dep.Tests/tools/report_portal/config.json') }}
+
+    - name: Download launch
+      uses: actions/download-artifact@v5
+      with:
+        name: rp-launch-${{ inputs.provider }}-${{ inputs.os_name }}
+        path: Dep.Tests/tools/report_portal
+
+    - name: Finish launch
+      id: finish
+      shell: bash
+      working-directory: Dep.Tests/tools/report_portal
+      env:
+        PROJECT_NAME: ${{ inputs.project_name }}
+        REPORT_API_KEY: ${{ inputs.api_key }}
+        ANALYZE: ${{ inputs.analyze }}
+      run: |
+        node -e "
+          const fs = require('fs');
+          const config = JSON.parse(fs.readFileSync('config.json', 'utf8'));
+          config.api_key = process.env.REPORT_API_KEY;
+          config.project_name = process.env.PROJECT_NAME;
+          fs.writeFileSync('config.json', JSON.stringify(config, null, 2));
+        "
+
+        set +e
+        python finish_launch.py --launch rp_launch.json 2>&1 | tee finish_output.log
+        EXIT_CODE=${PIPESTATUS[0]}
+        set -e
+
+        RP_URL=$(grep -oP 'RP_LAUNCH_URL=\K\S+' finish_output.log | tail -n 1 || true)
+        echo "rp_url=$RP_URL" >> $GITHUB_OUTPUT
+        rm -f finish_output.log
+
+        # A launch URL ends with the id of its launch, which the analyzer takes.
+        if [ "$EXIT_CODE" -eq 0 ] && [ "$ANALYZE" = "true" ] && [[ "$RP_URL" =~ /([0-9]+)$ ]]; then
+          python analyze_launches.py --launch-ids "${BASH_REMATCH[1]}" \
+            || echo "::warning::Failed to start the Report Portal analysis, continuing"
+        fi
+
+        exit $EXIT_CODE

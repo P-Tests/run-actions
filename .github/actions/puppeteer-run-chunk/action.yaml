@@ -11,9 +11,6 @@ inputs:
   chunk_size:
     description: 'Size of each chunk'
     required: true
-  num_chunks:
-    description: 'Total chunks in the run; decides which launch artifact the post job consumes'
-    required: true
   suite:
     description: 'Test suite to run (optional)'
     required: false
@@ -27,10 +24,6 @@ inputs:
   project_name:
     description: 'Report Portal project name'
     required: true
-  launch_name:
-    description: 'Report Portal launch name (optional)'
-    required: false
-    default: ''
   branch:
     description: 'Dep.Tests branch to checkout'
     required: false
@@ -57,15 +50,8 @@ inputs:
     description: 'Server URL to test against (optional; overrides testOptions.url in the OS config when set)'
     required: false
     default: ''
-  analyze:
-    description: 'Run the Report Portal auto-analyzer on the launch - only for a single-chunk run, a chunked run is analyzed after the merge'
-    required: false
-    default: 'true'
 
 outputs:
-  uuid:
-    description: 'Launch UUID from test run'
-    value: ${{ steps.run-tests.outputs.uuid }}
   rp_url:
     description: 'ReportPortal launch URL'
     value: ${{ steps.run-tests.outputs.rp_url }}
@@ -150,23 +136,21 @@ runs:
       shell: bash
       env:
         PROJECT_NAME: ${{ inputs.project_name }}
-        OS_NAME: ${{ inputs.os_name }}
-        LAUNCH_NAME_INPUT: ${{ inputs.launch_name }}
         REPORT_API_KEY: ${{ inputs.report_key }}
       run: |
-        LAUNCH_NAME="$LAUNCH_NAME_INPUT"
-        if [ -z "$LAUNCH_NAME" ]; then
-          LAUNCH_NAME="GitHub Actions - $PROJECT_NAME - $OS_NAME"
-        fi
-        export LAUNCH_NAME
         node -e "
           const fs = require('fs');
           const config = JSON.parse(fs.readFileSync('Dep.Tests/tools/report_portal/config.json', 'utf8'));
           config.api_key = process.env.REPORT_API_KEY;
           config.project_name = process.env.PROJECT_NAME;
-          config.launch_name = process.env.LAUNCH_NAME;
           fs.writeFileSync('Dep.Tests/tools/report_portal/config.json', JSON.stringify(config, null, 2));
         "
+
+    - name: Download launch
+      uses: actions/download-artifact@v5
+      with:
+        name: rp-launch-${{ inputs.provider }}-${{ inputs.os_name }}
+        path: Dep.Tests/puppeteer/engine
 
     - name: Configure test server URL
       if: ${{ inputs.url != '' }}
@@ -233,31 +217,15 @@ runs:
           --rerun-failed \
           --disable_animation \
           --config_params puppeteerOptions.headless=true \
-          --connect_portal $SUITE_ARG $THREADS_ARG 2>&1 | tee output.log
+          --join-launch rp_launch.json $SUITE_ARG $THREADS_ARG 2>&1 | tee output.log
         EXIT_CODE=${PIPESTATUS[0]}
         set -e
 
-        UUID=""
         RP_URL=""
         if [ -f "output.log" ]; then
-          UUID=$(grep 'RP_LAUNCH_UUID=' output.log 2>/dev/null | sed 's/.*RP_LAUNCH_UUID=//g' | tr -d '[:space:]' | tail -n 1 || echo "")
           RP_URL=$(grep 'RP_LAUNCH_URL=' output.log 2>/dev/null | sed 's/.*RP_LAUNCH_URL=//g' | tr -d '[:space:]' | tail -n 1 || echo "")
         fi
-
-        echo "uuid=$UUID" >> $GITHUB_OUTPUT
         echo "rp_url=$RP_URL" >> $GITHUB_OUTPUT
-
-        if [ -n "$UUID" ]; then
-          echo "$UUID" > launch_uuid.txt
-        else
-          touch launch_uuid.txt
-        fi
-
-        if [ -n "$RP_URL" ]; then
-          echo "$RP_URL" > launch_url.txt
-        else
-          touch launch_url.txt
-        fi
 
         rm -f output.log
 
@@ -274,46 +242,6 @@ runs:
       run: |
         echo "Clearing remote files for $PROVIDER after chunk $CHUNK_ID"
         node script/js/scripts/clearRun.js "$PROVIDER" "../$OS_CONFIG" || true
-
-    - name: Analyze Launch
-      if: ${{ always() && inputs.analyze == 'true' && inputs.num_chunks == '1' && steps.run-tests.outputs.rp_url != '' }}
-      shell: bash
-      working-directory: Dep.Tests/tools/report_portal
-      env:
-        RP_URL: ${{ steps.run-tests.outputs.rp_url }}
-      run: |
-        # A chunked run is analyzed once the launches are merged; a single launch is complete right here.
-        LAUNCH_ID=""
-        if [[ "$RP_URL" =~ /([0-9]+)$ ]]; then
-          LAUNCH_ID="${BASH_REMATCH[1]}"
-        fi
-
-        if [ -z "$LAUNCH_ID" ]; then
-          echo "No launch id in '$RP_URL', skipping analysis"
-          exit 0
-        fi
-
-        echo "Starting the analyzer for launch $LAUNCH_ID"
-        python analyze_launches.py --launch-ids "$LAUNCH_ID" || echo "::warning::Failed to start the Report Portal analysis, continuing"
-
-    - name: Upload Launch UUID
-      if: ${{ always() && inputs.num_chunks != '1' }}
-      uses: actions/upload-artifact@v5
-      with:
-        name: launch-uuid-${{ inputs.provider }}-${{ inputs.os_name }}-chunk-${{ inputs.chunk_id }}
-        path: Dep.Tests/puppeteer/engine/launch_uuid.txt
-        retention-days: 1
-        if-no-files-found: warn
-
-    - name: Upload Launch URL
-      if: ${{ always() && inputs.num_chunks == '1' }}
-      continue-on-error: true
-      uses: actions/upload-artifact@v5
-      with:
-        name: launch-url-${{ inputs.provider }}-${{ inputs.os_name }}-chunk-${{ inputs.chunk_id }}
-        path: Dep.Tests/puppeteer/engine/launch_url.txt
-        retention-days: 1
-        if-no-files-found: warn
 
     - name: Upload test results
       if: ${{ always() && steps.run-tests.outcome == 'failure' }}
