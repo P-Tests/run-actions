@@ -132,10 +132,36 @@ jobs:
           read_pat: ${{ secrets.READ_PAT }}
           test_path: ${{ inputs.test_path }}
 
+  start-docspaceEU:
+    name: Start launch - DocSpace EU - ${{ matrix.os.name }}
+    needs: [prepare-docspaceEU]
+    if: ${{ !cancelled() && needs.prepare-docspaceEU.result == 'success' }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: ${{ fromJson(needs.prepare-docspaceEU.outputs.os_matrix).os }}
+      fail-fast: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Start launch
+        uses: ./.github/actions/rp-start-launch
+        with:
+          provider: docspaceEU
+          suite: ${{ inputs.test_path == '' && 'hourly' || '' }}
+          os_name: ${{ matrix.os.name }}
+          os_config: config_chrome_${{ matrix.os.config }}.json
+          project_name: ${{ inputs.project_name || 'docspace-saas' }}
+          launch_name: ${{ inputs.launch_name || 'Hourly Tests - docspaceEU' }}
+          read_pat: ${{ secrets.READ_PAT }}
+          branch: ${{ needs.prepare-docspaceEU.outputs.branch }}
+          report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          test_path: ${{ inputs.test_path }}
+
   run-docspaceEU:
     name: DocSpace EU - ${{ matrix.os.name }} - Chunk ${{ matrix.chunk }}
-    needs: [prepare-docspaceEU, install-deps]
-    if: ${{ !cancelled() && needs.prepare-docspaceEU.result == 'success' }}
+    needs: [prepare-docspaceEU, install-deps, start-docspaceEU]
+    if: ${{ !cancelled() && needs.start-docspaceEU.result == 'success' }}
     runs-on: ${{ matrix.os.runner }}
     strategy:
       matrix:
@@ -152,11 +178,9 @@ jobs:
           suite: ${{ inputs.test_path == '' && 'hourly' || '' }}
           chunk_id: ${{ matrix.chunk }}
           chunk_size: ${{ needs.prepare-docspaceEU.outputs.chunk_size }}
-          num_chunks: ${{ needs.prepare-docspaceEU.outputs.num_chunks }}
           os_name: ${{ matrix.os.name }}
           os_config: config_chrome_${{ matrix.os.config }}.json
           project_name: ${{ inputs.project_name || 'docspace-saas' }}
-          launch_name: "${{ inputs.launch_name || format('Hourly Tests - docspaceEU{0}', needs.prepare-docspaceEU.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           branch: ${{ needs.prepare-docspaceEU.outputs.branch }}
@@ -165,8 +189,8 @@ jobs:
 
   post-docspaceEU-windows:
     name: Post - DocSpace EU - windows
-    needs: [prepare-docspaceEU, run-docspaceEU]
-    if: ${{ !cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows') }}
+    needs: [prepare-docspaceEU, run-docspaceEU, start-docspaceEU]
+    if: ${{ always() && needs.start-docspaceEU.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -178,8 +202,6 @@ jobs:
           provider: docspaceEU
           os_name: windows
           job_name_prefix: 'DocSpace EU'
-          num_chunks: ${{ needs.prepare-docspaceEU.outputs.num_chunks }}
-          launch_name: Hourly Tests - docspaceEU
           project_name: ${{ inputs.project_name || 'docspace-saas' }}
           api_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           branch: ${{ needs.prepare-docspaceEU.outputs.branch }}
@@ -189,8 +211,8 @@ jobs:
 
   post-docspaceEU-linux:
     name: Post - DocSpace EU - linux
-    needs: [prepare-docspaceEU, run-docspaceEU]
-    if: ${{ !cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux') }}
+    needs: [prepare-docspaceEU, run-docspaceEU, start-docspaceEU]
+    if: ${{ always() && needs.start-docspaceEU.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -202,8 +224,6 @@ jobs:
           provider: docspaceEU
           os_name: linux
           job_name_prefix: 'DocSpace EU'
-          num_chunks: ${{ needs.prepare-docspaceEU.outputs.num_chunks }}
-          launch_name: Hourly Tests - docspaceEU
           project_name: ${{ inputs.project_name || 'docspace-saas' }}
           api_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           branch: ${{ needs.prepare-docspaceEU.outputs.branch }}
@@ -213,8 +233,8 @@ jobs:
 
   post-docspaceEU-macos:
     name: Post - DocSpace EU - macos
-    needs: [prepare-docspaceEU, run-docspaceEU]
-    if: ${{ !cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos') }}
+    needs: [prepare-docspaceEU, run-docspaceEU, start-docspaceEU]
+    if: ${{ always() && needs.start-docspaceEU.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -226,8 +246,6 @@ jobs:
           provider: docspaceEU
           os_name: macos
           job_name_prefix: 'DocSpace EU'
-          num_chunks: ${{ needs.prepare-docspaceEU.outputs.num_chunks }}
-          launch_name: Hourly Tests - docspaceEU
           project_name: ${{ inputs.project_name || 'docspace-saas' }}
           api_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           branch: ${{ needs.prepare-docspaceEU.outputs.branch }}
@@ -260,10 +278,36 @@ jobs:
           read_pat: ${{ secrets.READ_PAT }}
           test_path: ${{ inputs.test_path }}
 
+  start-docspaceUS:
+    name: Start launch - DocSpace US - ${{ matrix.os.name }}
+    needs: [prepare-docspaceUS]
+    if: ${{ !cancelled() && needs.prepare-docspaceUS.result == 'success' }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: ${{ fromJson(needs.prepare-docspaceUS.outputs.os_matrix).os }}
+      fail-fast: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Start launch
+        uses: ./.github/actions/rp-start-launch
+        with:
+          provider: docspaceUS
+          suite: ${{ inputs.test_path == '' && 'hourly' || '' }}
+          os_name: ${{ matrix.os.name }}
+          os_config: config_chrome_${{ matrix.os.config }}.json
+          project_name: ${{ inputs.project_name || 'docspace-saas' }}
+          launch_name: ${{ inputs.launch_name || 'Hourly Tests - docspaceUS' }}
+          read_pat: ${{ secrets.READ_PAT }}
+          branch: ${{ needs.prepare-docspaceUS.outputs.branch }}
+          report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          test_path: ${{ inputs.test_path }}
+
   run-docspaceUS:
     name: DocSpace US - ${{ matrix.os.name }} - Chunk ${{ matrix.chunk }}
-    needs: [prepare-docspaceUS, install-deps]
-    if: ${{ !cancelled() && needs.prepare-docspaceUS.result == 'success' }}
+    needs: [prepare-docspaceUS, install-deps, start-docspaceUS]
+    if: ${{ !cancelled() && needs.start-docspaceUS.result == 'success' }}
     runs-on: ${{ matrix.os.runner }}
     strategy:
       matrix:
@@ -280,11 +324,9 @@ jobs:
           suite: ${{ inputs.test_path == '' && 'hourly' || '' }}
           chunk_id: ${{ matrix.chunk }}
           chunk_size: ${{ needs.prepare-docspaceUS.outputs.chunk_size }}
-          num_chunks: ${{ needs.prepare-docspaceUS.outputs.num_chunks }}
           os_name: ${{ matrix.os.name }}
           os_config: config_chrome_${{ matrix.os.config }}.json
           project_name: ${{ inputs.project_name || 'docspace-saas' }}
-          launch_name: "${{ inputs.launch_name || format('Hourly Tests - docspaceUS{0}', needs.prepare-docspaceUS.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           branch: ${{ needs.prepare-docspaceUS.outputs.branch }}
@@ -293,8 +335,8 @@ jobs:
 
   post-docspaceUS-windows:
     name: Post - DocSpace US - windows
-    needs: [prepare-docspaceUS, run-docspaceUS]
-    if: ${{ !cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows') }}
+    needs: [prepare-docspaceUS, run-docspaceUS, start-docspaceUS]
+    if: ${{ always() && needs.start-docspaceUS.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -306,8 +348,6 @@ jobs:
           provider: docspaceUS
           os_name: windows
           job_name_prefix: 'DocSpace US'
-          num_chunks: ${{ needs.prepare-docspaceUS.outputs.num_chunks }}
-          launch_name: Hourly Tests - docspaceUS
           project_name: ${{ inputs.project_name || 'docspace-saas' }}
           api_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           branch: ${{ needs.prepare-docspaceUS.outputs.branch }}
@@ -317,8 +357,8 @@ jobs:
 
   post-docspaceUS-linux:
     name: Post - DocSpace US - linux
-    needs: [prepare-docspaceUS, run-docspaceUS]
-    if: ${{ !cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux') }}
+    needs: [prepare-docspaceUS, run-docspaceUS, start-docspaceUS]
+    if: ${{ always() && needs.start-docspaceUS.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -330,8 +370,6 @@ jobs:
           provider: docspaceUS
           os_name: linux
           job_name_prefix: 'DocSpace US'
-          num_chunks: ${{ needs.prepare-docspaceUS.outputs.num_chunks }}
-          launch_name: Hourly Tests - docspaceUS
           project_name: ${{ inputs.project_name || 'docspace-saas' }}
           api_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           branch: ${{ needs.prepare-docspaceUS.outputs.branch }}
@@ -341,8 +379,8 @@ jobs:
 
   post-docspaceUS-macos:
     name: Post - DocSpace US - macos
-    needs: [prepare-docspaceUS, run-docspaceUS]
-    if: ${{ !cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos') }}
+    needs: [prepare-docspaceUS, run-docspaceUS, start-docspaceUS]
+    if: ${{ always() && needs.start-docspaceUS.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -354,8 +392,6 @@ jobs:
           provider: docspaceUS
           os_name: macos
           job_name_prefix: 'DocSpace US'
-          num_chunks: ${{ needs.prepare-docspaceUS.outputs.num_chunks }}
-          launch_name: Hourly Tests - docspaceUS
           project_name: ${{ inputs.project_name || 'docspace-saas' }}
           api_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           branch: ${{ needs.prepare-docspaceUS.outputs.branch }}

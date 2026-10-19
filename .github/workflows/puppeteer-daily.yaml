@@ -133,10 +133,32 @@ jobs:
           read_pat: ${{ secrets.READ_PAT }}
           test_path: ${{ inputs.test_path }}
 
+  start-docspaceEU-windows:
+    name: Start launch - DocSpace EU - windows
+    needs: [prepare-docspaceEU]
+    if: ${{ !cancelled() && needs.prepare-docspaceEU.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Start launch
+        uses: ./.github/actions/rp-start-launch
+        with:
+          provider: docspaceEU
+          suite: ${{ inputs.test_path == '' && 'daily' || '' }}
+          os_name: windows
+          os_config: config_chrome_win.json
+          project_name: ${{ inputs.project_name || 'docsserver-daily' }}
+          launch_name: ${{ inputs.launch_name || 'Daily Tests' }}
+          read_pat: ${{ secrets.READ_PAT }}
+          branch: ${{ needs.prepare-docspaceEU.outputs.branch }}
+          report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          test_path: ${{ inputs.test_path }}
+
   run-docspaceEU-windows:
     name: DocSpace EU - windows - Chunk ${{ matrix.chunk }}
-    needs: [prepare-docspaceEU, install-deps]
-    if: ${{ !cancelled() && needs.prepare-docspaceEU.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows') }}
+    needs: [prepare-docspaceEU, install-deps, start-docspaceEU-windows]
+    if: ${{ !cancelled() && needs.start-docspaceEU-windows.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows') }}
     runs-on: windows-latest
     strategy:
       matrix:
@@ -152,11 +174,9 @@ jobs:
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
           chunk_id: ${{ matrix.chunk }}
           chunk_size: ${{ needs.prepare-docspaceEU.outputs.chunk_size }}
-          num_chunks: ${{ needs.prepare-docspaceEU.outputs.num_chunks }}
           os_name: windows
           os_config: config_chrome_win.json
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
-          launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-docspaceEU.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
           branch: ${{ needs.prepare-docspaceEU.outputs.branch }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
@@ -164,10 +184,32 @@ jobs:
           clean: false
           threads: 1
 
-  run-docspaceEU-linux:
-    name: DocSpace EU - linux - Chunk ${{ matrix.chunk }}
+  start-docspaceEU-linux:
+    name: Start launch - DocSpace EU - linux
     needs: [prepare-docspaceEU, run-docspaceEU-windows]
     if: ${{ !cancelled() && needs.prepare-docspaceEU.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Start launch
+        uses: ./.github/actions/rp-start-launch
+        with:
+          provider: docspaceEU
+          suite: ${{ inputs.test_path == '' && 'daily' || '' }}
+          os_name: linux
+          os_config: config_chrome_linux.json
+          project_name: ${{ inputs.project_name || 'docsserver-daily' }}
+          launch_name: ${{ inputs.launch_name || 'Daily Tests' }}
+          read_pat: ${{ secrets.READ_PAT }}
+          branch: ${{ needs.prepare-docspaceEU.outputs.branch }}
+          report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          test_path: ${{ inputs.test_path }}
+
+  run-docspaceEU-linux:
+    name: DocSpace EU - linux - Chunk ${{ matrix.chunk }}
+    needs: [prepare-docspaceEU, start-docspaceEU-linux]
+    if: ${{ !cancelled() && needs.start-docspaceEU-linux.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux') }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -183,11 +225,9 @@ jobs:
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
           chunk_id: ${{ matrix.chunk }}
           chunk_size: ${{ needs.prepare-docspaceEU.outputs.chunk_size }}
-          num_chunks: ${{ needs.prepare-docspaceEU.outputs.num_chunks }}
           os_name: linux
           os_config: config_chrome_linux.json
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
-          launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-docspaceEU.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
           branch: ${{ needs.prepare-docspaceEU.outputs.branch }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
@@ -195,10 +235,32 @@ jobs:
           clean: false
           threads: 1
 
-  run-docspaceEU-macos:
-    name: DocSpace EU - macos - Chunk ${{ matrix.chunk }}
+  start-docspaceEU-macos:
+    name: Start launch - DocSpace EU - macos
     needs: [prepare-docspaceEU, run-docspaceEU-linux]
     if: ${{ !cancelled() && needs.prepare-docspaceEU.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Start launch
+        uses: ./.github/actions/rp-start-launch
+        with:
+          provider: docspaceEU
+          suite: ${{ inputs.test_path == '' && 'daily' || '' }}
+          os_name: macos
+          os_config: config_chrome_mac.json
+          project_name: ${{ inputs.project_name || 'docsserver-daily' }}
+          launch_name: ${{ inputs.launch_name || 'Daily Tests' }}
+          read_pat: ${{ secrets.READ_PAT }}
+          branch: ${{ needs.prepare-docspaceEU.outputs.branch }}
+          report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          test_path: ${{ inputs.test_path }}
+
+  run-docspaceEU-macos:
+    name: DocSpace EU - macos - Chunk ${{ matrix.chunk }}
+    needs: [prepare-docspaceEU, start-docspaceEU-macos]
+    if: ${{ !cancelled() && needs.start-docspaceEU-macos.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos') }}
     runs-on: macos-latest
     strategy:
       matrix:
@@ -214,11 +276,9 @@ jobs:
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
           chunk_id: ${{ matrix.chunk }}
           chunk_size: ${{ needs.prepare-docspaceEU.outputs.chunk_size }}
-          num_chunks: ${{ needs.prepare-docspaceEU.outputs.num_chunks }}
           os_name: macos
           os_config: config_chrome_mac.json
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
-          launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-docspaceEU.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
           branch: ${{ needs.prepare-docspaceEU.outputs.branch }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
@@ -228,8 +288,8 @@ jobs:
 
   post-docspaceEU-windows:
     name: Post - DocSpace EU - windows
-    needs: [prepare-docspaceEU, run-docspaceEU-windows]
-    if: ${{ !cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows') }}
+    needs: [prepare-docspaceEU, run-docspaceEU-windows, start-docspaceEU-windows]
+    if: ${{ always() && needs.start-docspaceEU-windows.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -241,8 +301,6 @@ jobs:
           provider: docspaceEU
           os_name: windows
           job_name_prefix: 'DocSpace EU'
-          num_chunks: ${{ needs.prepare-docspaceEU.outputs.num_chunks }}
-          launch_name: Daily Tests
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
           api_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           branch: ${{ needs.prepare-docspaceEU.outputs.branch }}
@@ -252,8 +310,8 @@ jobs:
 
   post-docspaceEU-linux:
     name: Post - DocSpace EU - linux
-    needs: [prepare-docspaceEU, run-docspaceEU-linux]
-    if: ${{ !cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux') }}
+    needs: [prepare-docspaceEU, run-docspaceEU-linux, start-docspaceEU-linux]
+    if: ${{ always() && needs.start-docspaceEU-linux.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -265,8 +323,6 @@ jobs:
           provider: docspaceEU
           os_name: linux
           job_name_prefix: 'DocSpace EU'
-          num_chunks: ${{ needs.prepare-docspaceEU.outputs.num_chunks }}
-          launch_name: Daily Tests
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
           api_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           branch: ${{ needs.prepare-docspaceEU.outputs.branch }}
@@ -276,8 +332,8 @@ jobs:
 
   post-docspaceEU-macos:
     name: Post - DocSpace EU - macos
-    needs: [prepare-docspaceEU, run-docspaceEU-macos]
-    if: ${{ !cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos') }}
+    needs: [prepare-docspaceEU, run-docspaceEU-macos, start-docspaceEU-macos]
+    if: ${{ always() && needs.start-docspaceEU-macos.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -289,8 +345,6 @@ jobs:
           provider: docspaceEU
           os_name: macos
           job_name_prefix: 'DocSpace EU'
-          num_chunks: ${{ needs.prepare-docspaceEU.outputs.num_chunks }}
-          launch_name: Daily Tests
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
           api_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           branch: ${{ needs.prepare-docspaceEU.outputs.branch }}
@@ -322,10 +376,32 @@ jobs:
           read_pat: ${{ secrets.READ_PAT }}
           test_path: ${{ inputs.test_path }}
 
+  start-docspaceUS-windows:
+    name: Start launch - DocSpace US - windows
+    needs: [prepare-docspaceUS]
+    if: ${{ !cancelled() && needs.prepare-docspaceUS.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Start launch
+        uses: ./.github/actions/rp-start-launch
+        with:
+          provider: docspaceUS
+          suite: ${{ inputs.test_path == '' && 'daily' || '' }}
+          os_name: windows
+          os_config: config_chrome_win.json
+          project_name: ${{ inputs.project_name || 'docsserver-daily' }}
+          launch_name: ${{ inputs.launch_name || 'Daily Tests' }}
+          read_pat: ${{ secrets.READ_PAT }}
+          branch: ${{ needs.prepare-docspaceUS.outputs.branch }}
+          report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          test_path: ${{ inputs.test_path }}
+
   run-docspaceUS-windows:
     name: DocSpace US - windows - Chunk ${{ matrix.chunk }}
-    needs: [prepare-docspaceUS, install-deps]
-    if: ${{ !cancelled() && needs.prepare-docspaceUS.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows') }}
+    needs: [prepare-docspaceUS, install-deps, start-docspaceUS-windows]
+    if: ${{ !cancelled() && needs.start-docspaceUS-windows.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows') }}
     runs-on: windows-latest
     strategy:
       matrix:
@@ -341,11 +417,9 @@ jobs:
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
           chunk_id: ${{ matrix.chunk }}
           chunk_size: ${{ needs.prepare-docspaceUS.outputs.chunk_size }}
-          num_chunks: ${{ needs.prepare-docspaceUS.outputs.num_chunks }}
           os_name: windows
           os_config: config_chrome_win.json
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
-          launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-docspaceUS.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
           branch: ${{ needs.prepare-docspaceUS.outputs.branch }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
@@ -353,10 +427,32 @@ jobs:
           clean: false
           threads: 1
 
-  run-docspaceUS-linux:
-    name: DocSpace US - linux - Chunk ${{ matrix.chunk }}
+  start-docspaceUS-linux:
+    name: Start launch - DocSpace US - linux
     needs: [prepare-docspaceUS, run-docspaceUS-windows]
     if: ${{ !cancelled() && needs.prepare-docspaceUS.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Start launch
+        uses: ./.github/actions/rp-start-launch
+        with:
+          provider: docspaceUS
+          suite: ${{ inputs.test_path == '' && 'daily' || '' }}
+          os_name: linux
+          os_config: config_chrome_linux.json
+          project_name: ${{ inputs.project_name || 'docsserver-daily' }}
+          launch_name: ${{ inputs.launch_name || 'Daily Tests' }}
+          read_pat: ${{ secrets.READ_PAT }}
+          branch: ${{ needs.prepare-docspaceUS.outputs.branch }}
+          report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          test_path: ${{ inputs.test_path }}
+
+  run-docspaceUS-linux:
+    name: DocSpace US - linux - Chunk ${{ matrix.chunk }}
+    needs: [prepare-docspaceUS, start-docspaceUS-linux]
+    if: ${{ !cancelled() && needs.start-docspaceUS-linux.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux') }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -372,11 +468,9 @@ jobs:
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
           chunk_id: ${{ matrix.chunk }}
           chunk_size: ${{ needs.prepare-docspaceUS.outputs.chunk_size }}
-          num_chunks: ${{ needs.prepare-docspaceUS.outputs.num_chunks }}
           os_name: linux
           os_config: config_chrome_linux.json
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
-          launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-docspaceUS.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
           branch: ${{ needs.prepare-docspaceUS.outputs.branch }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
@@ -384,10 +478,32 @@ jobs:
           clean: false
           threads: 1
 
-  run-docspaceUS-macos:
-    name: DocSpace US - macos - Chunk ${{ matrix.chunk }}
+  start-docspaceUS-macos:
+    name: Start launch - DocSpace US - macos
     needs: [prepare-docspaceUS, run-docspaceUS-linux]
     if: ${{ !cancelled() && needs.prepare-docspaceUS.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Start launch
+        uses: ./.github/actions/rp-start-launch
+        with:
+          provider: docspaceUS
+          suite: ${{ inputs.test_path == '' && 'daily' || '' }}
+          os_name: macos
+          os_config: config_chrome_mac.json
+          project_name: ${{ inputs.project_name || 'docsserver-daily' }}
+          launch_name: ${{ inputs.launch_name || 'Daily Tests' }}
+          read_pat: ${{ secrets.READ_PAT }}
+          branch: ${{ needs.prepare-docspaceUS.outputs.branch }}
+          report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          test_path: ${{ inputs.test_path }}
+
+  run-docspaceUS-macos:
+    name: DocSpace US - macos - Chunk ${{ matrix.chunk }}
+    needs: [prepare-docspaceUS, start-docspaceUS-macos]
+    if: ${{ !cancelled() && needs.start-docspaceUS-macos.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos') }}
     runs-on: macos-latest
     strategy:
       matrix:
@@ -403,11 +519,9 @@ jobs:
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
           chunk_id: ${{ matrix.chunk }}
           chunk_size: ${{ needs.prepare-docspaceUS.outputs.chunk_size }}
-          num_chunks: ${{ needs.prepare-docspaceUS.outputs.num_chunks }}
           os_name: macos
           os_config: config_chrome_mac.json
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
-          launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-docspaceUS.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
           branch: ${{ needs.prepare-docspaceUS.outputs.branch }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
@@ -417,8 +531,8 @@ jobs:
 
   post-docspaceUS-windows:
     name: Post - DocSpace US - windows
-    needs: [prepare-docspaceUS, run-docspaceUS-windows]
-    if: ${{ !cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows') }}
+    needs: [prepare-docspaceUS, run-docspaceUS-windows, start-docspaceUS-windows]
+    if: ${{ always() && needs.start-docspaceUS-windows.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -430,8 +544,6 @@ jobs:
           provider: docspaceUS
           os_name: windows
           job_name_prefix: 'DocSpace US'
-          num_chunks: ${{ needs.prepare-docspaceUS.outputs.num_chunks }}
-          launch_name: Daily Tests
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
           api_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           branch: ${{ needs.prepare-docspaceUS.outputs.branch }}
@@ -441,8 +553,8 @@ jobs:
 
   post-docspaceUS-linux:
     name: Post - DocSpace US - linux
-    needs: [prepare-docspaceUS, run-docspaceUS-linux]
-    if: ${{ !cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux') }}
+    needs: [prepare-docspaceUS, run-docspaceUS-linux, start-docspaceUS-linux]
+    if: ${{ always() && needs.start-docspaceUS-linux.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -454,8 +566,6 @@ jobs:
           provider: docspaceUS
           os_name: linux
           job_name_prefix: 'DocSpace US'
-          num_chunks: ${{ needs.prepare-docspaceUS.outputs.num_chunks }}
-          launch_name: Daily Tests
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
           api_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           branch: ${{ needs.prepare-docspaceUS.outputs.branch }}
@@ -465,8 +575,8 @@ jobs:
 
   post-docspaceUS-macos:
     name: Post - DocSpace US - macos
-    needs: [prepare-docspaceUS, run-docspaceUS-macos]
-    if: ${{ !cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos') }}
+    needs: [prepare-docspaceUS, run-docspaceUS-macos, start-docspaceUS-macos]
+    if: ${{ always() && needs.start-docspaceUS-macos.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -478,8 +588,6 @@ jobs:
           provider: docspaceUS
           os_name: macos
           job_name_prefix: 'DocSpace US'
-          num_chunks: ${{ needs.prepare-docspaceUS.outputs.num_chunks }}
-          launch_name: Daily Tests
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
           api_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           branch: ${{ needs.prepare-docspaceUS.outputs.branch }}
@@ -511,10 +619,32 @@ jobs:
           read_pat: ${{ secrets.READ_PAT }}
           test_path: ${{ inputs.test_path }}
 
+  start-ncoc-windows:
+    name: Start launch - NCOC - windows
+    needs: [prepare-ncoc]
+    if: ${{ !cancelled() && needs.prepare-ncoc.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Start launch
+        uses: ./.github/actions/rp-start-launch
+        with:
+          provider: ncoc
+          suite: ${{ inputs.test_path == '' && 'daily' || '' }}
+          os_name: windows
+          os_config: config_chrome_win.json
+          project_name: ${{ inputs.project_name || 'docsserver-daily' }}
+          launch_name: ${{ inputs.launch_name || 'Daily Tests' }}
+          read_pat: ${{ secrets.READ_PAT }}
+          branch: ${{ needs.prepare-ncoc.outputs.branch }}
+          report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          test_path: ${{ inputs.test_path }}
+
   run-ncoc-windows:
     name: NCOC - windows - Chunk ${{ matrix.chunk }}
-    needs: [prepare-ncoc, install-deps]
-    if: ${{ !cancelled() && needs.prepare-ncoc.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows') }}
+    needs: [prepare-ncoc, install-deps, start-ncoc-windows]
+    if: ${{ !cancelled() && needs.start-ncoc-windows.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows') }}
     runs-on: windows-latest
     strategy:
       matrix:
@@ -530,11 +660,9 @@ jobs:
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
           chunk_id: ${{ matrix.chunk }}
           chunk_size: ${{ needs.prepare-ncoc.outputs.chunk_size }}
-          num_chunks: ${{ needs.prepare-ncoc.outputs.num_chunks }}
           os_name: windows
           os_config: config_chrome_win.json
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
-          launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-ncoc.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
           branch: ${{ needs.prepare-ncoc.outputs.branch }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
@@ -542,10 +670,32 @@ jobs:
           clean: false
           threads: 1
 
-  run-ncoc-linux:
-    name: NCOC - linux - Chunk ${{ matrix.chunk }}
+  start-ncoc-linux:
+    name: Start launch - NCOC - linux
     needs: [prepare-ncoc, run-ncoc-windows]
     if: ${{ !cancelled() && needs.prepare-ncoc.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Start launch
+        uses: ./.github/actions/rp-start-launch
+        with:
+          provider: ncoc
+          suite: ${{ inputs.test_path == '' && 'daily' || '' }}
+          os_name: linux
+          os_config: config_chrome_linux.json
+          project_name: ${{ inputs.project_name || 'docsserver-daily' }}
+          launch_name: ${{ inputs.launch_name || 'Daily Tests' }}
+          read_pat: ${{ secrets.READ_PAT }}
+          branch: ${{ needs.prepare-ncoc.outputs.branch }}
+          report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          test_path: ${{ inputs.test_path }}
+
+  run-ncoc-linux:
+    name: NCOC - linux - Chunk ${{ matrix.chunk }}
+    needs: [prepare-ncoc, start-ncoc-linux]
+    if: ${{ !cancelled() && needs.start-ncoc-linux.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux') }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -561,11 +711,9 @@ jobs:
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
           chunk_id: ${{ matrix.chunk }}
           chunk_size: ${{ needs.prepare-ncoc.outputs.chunk_size }}
-          num_chunks: ${{ needs.prepare-ncoc.outputs.num_chunks }}
           os_name: linux
           os_config: config_chrome_linux.json
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
-          launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-ncoc.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
           branch: ${{ needs.prepare-ncoc.outputs.branch }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
@@ -573,10 +721,32 @@ jobs:
           clean: false
           threads: 1
 
-  run-ncoc-macos:
-    name: NCOC - macos - Chunk ${{ matrix.chunk }}
+  start-ncoc-macos:
+    name: Start launch - NCOC - macos
     needs: [prepare-ncoc, run-ncoc-linux]
     if: ${{ !cancelled() && needs.prepare-ncoc.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Start launch
+        uses: ./.github/actions/rp-start-launch
+        with:
+          provider: ncoc
+          suite: ${{ inputs.test_path == '' && 'daily' || '' }}
+          os_name: macos
+          os_config: config_chrome_mac.json
+          project_name: ${{ inputs.project_name || 'docsserver-daily' }}
+          launch_name: ${{ inputs.launch_name || 'Daily Tests' }}
+          read_pat: ${{ secrets.READ_PAT }}
+          branch: ${{ needs.prepare-ncoc.outputs.branch }}
+          report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          test_path: ${{ inputs.test_path }}
+
+  run-ncoc-macos:
+    name: NCOC - macos - Chunk ${{ matrix.chunk }}
+    needs: [prepare-ncoc, start-ncoc-macos]
+    if: ${{ !cancelled() && needs.start-ncoc-macos.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos') }}
     runs-on: macos-latest
     strategy:
       matrix:
@@ -592,11 +762,9 @@ jobs:
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
           chunk_id: ${{ matrix.chunk }}
           chunk_size: ${{ needs.prepare-ncoc.outputs.chunk_size }}
-          num_chunks: ${{ needs.prepare-ncoc.outputs.num_chunks }}
           os_name: macos
           os_config: config_chrome_mac.json
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
-          launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-ncoc.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
           branch: ${{ needs.prepare-ncoc.outputs.branch }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
@@ -606,8 +774,8 @@ jobs:
 
   post-ncoc-windows:
     name: Post - NCOC - windows
-    needs: [prepare-ncoc, run-ncoc-windows]
-    if: ${{ !cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows') }}
+    needs: [prepare-ncoc, run-ncoc-windows, start-ncoc-windows]
+    if: ${{ always() && needs.start-ncoc-windows.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -619,8 +787,6 @@ jobs:
           provider: ncoc
           os_name: windows
           job_name_prefix: 'NCOC'
-          num_chunks: ${{ needs.prepare-ncoc.outputs.num_chunks }}
-          launch_name: Daily Tests
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
           api_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           branch: ${{ needs.prepare-ncoc.outputs.branch }}
@@ -630,8 +796,8 @@ jobs:
 
   post-ncoc-linux:
     name: Post - NCOC - linux
-    needs: [prepare-ncoc, run-ncoc-linux]
-    if: ${{ !cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux') }}
+    needs: [prepare-ncoc, run-ncoc-linux, start-ncoc-linux]
+    if: ${{ always() && needs.start-ncoc-linux.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -643,8 +809,6 @@ jobs:
           provider: ncoc
           os_name: linux
           job_name_prefix: 'NCOC'
-          num_chunks: ${{ needs.prepare-ncoc.outputs.num_chunks }}
-          launch_name: Daily Tests
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
           api_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           branch: ${{ needs.prepare-ncoc.outputs.branch }}
@@ -654,8 +818,8 @@ jobs:
 
   post-ncoc-macos:
     name: Post - NCOC - macos
-    needs: [prepare-ncoc, run-ncoc-macos]
-    if: ${{ !cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos') }}
+    needs: [prepare-ncoc, run-ncoc-macos, start-ncoc-macos]
+    if: ${{ always() && needs.start-ncoc-macos.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -667,8 +831,6 @@ jobs:
           provider: ncoc
           os_name: macos
           job_name_prefix: 'NCOC'
-          num_chunks: ${{ needs.prepare-ncoc.outputs.num_chunks }}
-          launch_name: Daily Tests
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
           api_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           branch: ${{ needs.prepare-ncoc.outputs.branch }}
@@ -700,10 +862,32 @@ jobs:
           read_pat: ${{ secrets.READ_PAT }}
           test_path: ${{ inputs.test_path }}
 
+  start-ocis-windows:
+    name: Start launch - OCIS - windows
+    needs: [prepare-ocis]
+    if: ${{ !cancelled() && needs.prepare-ocis.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Start launch
+        uses: ./.github/actions/rp-start-launch
+        with:
+          provider: ocis
+          suite: ${{ inputs.test_path == '' && 'daily' || '' }}
+          os_name: windows
+          os_config: config_chrome_win.json
+          project_name: ${{ inputs.project_name || 'docsserver-daily' }}
+          launch_name: ${{ inputs.launch_name || 'Daily Tests' }}
+          read_pat: ${{ secrets.READ_PAT }}
+          branch: ${{ needs.prepare-ocis.outputs.branch }}
+          report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          test_path: ${{ inputs.test_path }}
+
   run-ocis-windows:
     name: OCIS - windows - Chunk ${{ matrix.chunk }}
-    needs: [prepare-ocis, install-deps]
-    if: ${{ !cancelled() && needs.prepare-ocis.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows') }}
+    needs: [prepare-ocis, install-deps, start-ocis-windows]
+    if: ${{ !cancelled() && needs.start-ocis-windows.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows') }}
     runs-on: windows-latest
     strategy:
       matrix:
@@ -719,11 +903,9 @@ jobs:
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
           chunk_id: ${{ matrix.chunk }}
           chunk_size: ${{ needs.prepare-ocis.outputs.chunk_size }}
-          num_chunks: ${{ needs.prepare-ocis.outputs.num_chunks }}
           os_name: windows
           os_config: config_chrome_win.json
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
-          launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-ocis.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
           branch: ${{ needs.prepare-ocis.outputs.branch }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
@@ -731,10 +913,32 @@ jobs:
           clean: false
           threads: 1
 
-  run-ocis-linux:
-    name: OCIS - linux - Chunk ${{ matrix.chunk }}
+  start-ocis-linux:
+    name: Start launch - OCIS - linux
     needs: [prepare-ocis, run-ocis-windows]
     if: ${{ !cancelled() && needs.prepare-ocis.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Start launch
+        uses: ./.github/actions/rp-start-launch
+        with:
+          provider: ocis
+          suite: ${{ inputs.test_path == '' && 'daily' || '' }}
+          os_name: linux
+          os_config: config_chrome_linux.json
+          project_name: ${{ inputs.project_name || 'docsserver-daily' }}
+          launch_name: ${{ inputs.launch_name || 'Daily Tests' }}
+          read_pat: ${{ secrets.READ_PAT }}
+          branch: ${{ needs.prepare-ocis.outputs.branch }}
+          report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          test_path: ${{ inputs.test_path }}
+
+  run-ocis-linux:
+    name: OCIS - linux - Chunk ${{ matrix.chunk }}
+    needs: [prepare-ocis, start-ocis-linux]
+    if: ${{ !cancelled() && needs.start-ocis-linux.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux') }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -750,11 +954,9 @@ jobs:
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
           chunk_id: ${{ matrix.chunk }}
           chunk_size: ${{ needs.prepare-ocis.outputs.chunk_size }}
-          num_chunks: ${{ needs.prepare-ocis.outputs.num_chunks }}
           os_name: linux
           os_config: config_chrome_linux.json
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
-          launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-ocis.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
           branch: ${{ needs.prepare-ocis.outputs.branch }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
@@ -762,10 +964,32 @@ jobs:
           clean: false
           threads: 1
 
-  run-ocis-macos:
-    name: OCIS - macos - Chunk ${{ matrix.chunk }}
+  start-ocis-macos:
+    name: Start launch - OCIS - macos
     needs: [prepare-ocis, run-ocis-linux]
     if: ${{ !cancelled() && needs.prepare-ocis.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Start launch
+        uses: ./.github/actions/rp-start-launch
+        with:
+          provider: ocis
+          suite: ${{ inputs.test_path == '' && 'daily' || '' }}
+          os_name: macos
+          os_config: config_chrome_mac.json
+          project_name: ${{ inputs.project_name || 'docsserver-daily' }}
+          launch_name: ${{ inputs.launch_name || 'Daily Tests' }}
+          read_pat: ${{ secrets.READ_PAT }}
+          branch: ${{ needs.prepare-ocis.outputs.branch }}
+          report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          test_path: ${{ inputs.test_path }}
+
+  run-ocis-macos:
+    name: OCIS - macos - Chunk ${{ matrix.chunk }}
+    needs: [prepare-ocis, start-ocis-macos]
+    if: ${{ !cancelled() && needs.start-ocis-macos.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos') }}
     runs-on: macos-latest
     strategy:
       matrix:
@@ -781,11 +1005,9 @@ jobs:
           suite: ${{ inputs.test_path == '' && 'daily' || '' }}
           chunk_id: ${{ matrix.chunk }}
           chunk_size: ${{ needs.prepare-ocis.outputs.chunk_size }}
-          num_chunks: ${{ needs.prepare-ocis.outputs.num_chunks }}
           os_name: macos
           os_config: config_chrome_mac.json
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
-          launch_name: "${{ inputs.launch_name || format('Daily Tests{0}', needs.prepare-ocis.outputs.num_chunks > 1 && format(' - Chunk {0}', matrix.chunk) || '') }}"
           read_pat: ${{ secrets.READ_PAT }}
           branch: ${{ needs.prepare-ocis.outputs.branch }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
@@ -795,8 +1017,8 @@ jobs:
 
   post-ocis-windows:
     name: Post - OCIS - windows
-    needs: [prepare-ocis, run-ocis-windows]
-    if: ${{ !cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows') }}
+    needs: [prepare-ocis, run-ocis-windows, start-ocis-windows]
+    if: ${{ always() && needs.start-ocis-windows.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -808,8 +1030,6 @@ jobs:
           provider: ocis
           os_name: windows
           job_name_prefix: 'OCIS'
-          num_chunks: ${{ needs.prepare-ocis.outputs.num_chunks }}
-          launch_name: Daily Tests
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
           api_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           branch: ${{ needs.prepare-ocis.outputs.branch }}
@@ -819,8 +1039,8 @@ jobs:
 
   post-ocis-linux:
     name: Post - OCIS - linux
-    needs: [prepare-ocis, run-ocis-linux]
-    if: ${{ !cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux') }}
+    needs: [prepare-ocis, run-ocis-linux, start-ocis-linux]
+    if: ${{ always() && needs.start-ocis-linux.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -832,8 +1052,6 @@ jobs:
           provider: ocis
           os_name: linux
           job_name_prefix: 'OCIS'
-          num_chunks: ${{ needs.prepare-ocis.outputs.num_chunks }}
-          launch_name: Daily Tests
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
           api_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           branch: ${{ needs.prepare-ocis.outputs.branch }}
@@ -843,8 +1061,8 @@ jobs:
 
   post-ocis-macos:
     name: Post - OCIS - macos
-    needs: [prepare-ocis, run-ocis-macos]
-    if: ${{ !cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos') }}
+    needs: [prepare-ocis, run-ocis-macos, start-ocis-macos]
+    if: ${{ always() && needs.start-ocis-macos.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -856,8 +1074,6 @@ jobs:
           provider: ocis
           os_name: macos
           job_name_prefix: 'OCIS'
-          num_chunks: ${{ needs.prepare-ocis.outputs.num_chunks }}
-          launch_name: Daily Tests
           project_name: ${{ inputs.project_name || 'docsserver-daily' }}
           api_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           branch: ${{ needs.prepare-ocis.outputs.branch }}
