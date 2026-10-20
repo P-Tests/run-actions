@@ -1,5 +1,5 @@
 ﻿name: Puppeteer DocServer test
-run-name: Puppeteer DocServer test - ${{ github.event.inputs.url }}
+run-name: Puppeteer DocServer test - ${{ inputs.url }} - ${{ inputs.os }}
 
 on:
   workflow_dispatch:
@@ -15,15 +15,14 @@ on:
       os:
         description: 'Operating system to run on'
         required: true
-        default: 'all'
+        default: 'linux'
         type: choice
         options:
-          - all
           - windows
           - linux
           - macos
       branch:
-        description: 'Dep.Tests branch override — leave empty to use the stand default'
+        description: 'Dep.Tests branch or tag override — leave empty to use the tag of the stand build'
         required: false
         default: ''
         type: string
@@ -72,25 +71,18 @@ jobs:
     name: Resolve branch
     runs-on: ubuntu-latest
     outputs:
-      branch: ${{ steps.resolve.outputs.branch }}
+      branch: ${{ steps.resolve.outputs.ref }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
-      - name: Resolve Dep.Tests branch
+      - name: Resolve Dep.Tests ref from the branch or the stand build
         id: resolve
-        shell: bash
-        env:
-          BRANCH_INPUT: ${{ inputs.branch }}
-          STAND: ${{ inputs.url }}
-        run: |
-          if [ -n "$BRANCH_INPUT" ]; then
-            BRANCH="$BRANCH_INPUT"
-            echo "Branch override -> Dep.Tests branch '$BRANCH'"
-          else
-            BRANCH=$(jq -r --arg s "$STAND" '.docserver[$s] // "master"' .github/branches.json)
-            echo "Stand '$STAND' -> Dep.Tests branch '$BRANCH'"
-          fi
-          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+        uses: ./.github/actions/resolve-tests-ref
+        with:
+          label: stand ${{ inputs.url }}
+          server_url: ${{ inputs.url == 'kim' && secrets.URL_RELEASE || secrets.URL_HOTFIX }}
+          branch: ${{ inputs.branch }}
+          read_pat: ${{ secrets.READ_PAT }}
 
   prepare:
     name: Prepare Test Matrix
@@ -118,7 +110,7 @@ jobs:
 
   install-deps-windows:
     name: Install dependencies - windows
-    if: "inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows'"
+    if: "inputs.os == 'windows'"
     continue-on-error: true
     runs-on: windows-latest
     steps:
@@ -131,7 +123,7 @@ jobs:
 
   install-deps-linux:
     name: Install dependencies - linux
-    if: "inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux'"
+    if: "inputs.os == 'linux'"
     continue-on-error: true
     runs-on: ubuntu-latest
     steps:
@@ -144,7 +136,7 @@ jobs:
 
   install-deps-macos:
     name: Install dependencies - macos
-    if: "inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos'"
+    if: "inputs.os == 'macos'"
     continue-on-error: true
     runs-on: macos-latest
     steps:
@@ -158,7 +150,7 @@ jobs:
   start-launch-windows:
     name: Start Windows Launch
     needs: [prepare]
-    if: "!cancelled() && needs.prepare.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows')"
+    if: "!cancelled() && needs.prepare.result == 'success' && inputs.os == 'windows'"
     runs-on: ubuntu-latest
 
     steps:
@@ -182,7 +174,7 @@ jobs:
   run-tests-windows:
     name: Windows - Chunk ${{ matrix.chunk }}
     needs: [prepare, install-deps-windows, start-launch-windows]
-    if: "!cancelled() && needs.start-launch-windows.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows')"
+    if: "!cancelled() && needs.start-launch-windows.result == 'success' && inputs.os == 'windows'"
     runs-on: windows-latest
     strategy:
       matrix:
@@ -236,7 +228,7 @@ jobs:
   start-launch-linux:
     name: Start Linux Launch
     needs: [prepare]
-    if: "!cancelled() && needs.prepare.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux')"
+    if: "!cancelled() && needs.prepare.result == 'success' && inputs.os == 'linux'"
     runs-on: ubuntu-latest
 
     steps:
@@ -260,7 +252,7 @@ jobs:
   run-tests-linux:
     name: Linux - Chunk ${{ matrix.chunk }}
     needs: [prepare, install-deps-linux, start-launch-linux]
-    if: "!cancelled() && needs.start-launch-linux.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux')"
+    if: "!cancelled() && needs.start-launch-linux.result == 'success' && inputs.os == 'linux'"
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -314,7 +306,7 @@ jobs:
   start-launch-macos:
     name: Start macOS Launch
     needs: [prepare]
-    if: "!cancelled() && needs.prepare.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos')"
+    if: "!cancelled() && needs.prepare.result == 'success' && inputs.os == 'macos'"
     runs-on: ubuntu-latest
 
     steps:
@@ -338,7 +330,7 @@ jobs:
   run-tests-macos:
     name: macOS - Chunk ${{ matrix.chunk }}
     needs: [prepare, install-deps-macos, start-launch-macos]
-    if: "!cancelled() && needs.start-launch-macos.result == 'success' && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos')"
+    if: "!cancelled() && needs.start-launch-macos.result == 'success' && inputs.os == 'macos'"
     runs-on: macos-latest
     strategy:
       matrix:
@@ -393,7 +385,7 @@ jobs:
     name: Windows Test Summary
     needs: [prepare, finish-launch-windows]
     runs-on: ubuntu-latest
-    if: "!cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'windows')"
+    if: "!cancelled() && inputs.os == 'windows'"
 
     steps:
       - name: Checkout repository
@@ -475,7 +467,7 @@ jobs:
     name: Linux Test Summary
     needs: [prepare, finish-launch-linux]
     runs-on: ubuntu-latest
-    if: "!cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'linux')"
+    if: "!cancelled() && inputs.os == 'linux'"
 
     steps:
       - name: Checkout repository
@@ -557,7 +549,7 @@ jobs:
     name: macOS Test Summary
     needs: [prepare, finish-launch-macos]
     runs-on: ubuntu-latest
-    if: "!cancelled() && (inputs.os == '' || inputs.os == 'all' || inputs.os == 'macos')"
+    if: "!cancelled() && inputs.os == 'macos'"
 
     steps:
       - name: Checkout repository

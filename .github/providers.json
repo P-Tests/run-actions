@@ -1,0 +1,7 @@
+{
+  "_comment": "Dep.Tests config of each provider of the daily/hourly runs. Its testOptions.apiUrl is the document server whose build selects the Dep.Tests tag (see .github/actions/resolve-tests-ref).",
+  "docspaceEU": "puppeteer/providers/docspace/configs/eu.json",
+  "docspaceUS": "puppeteer/providers/docspace/configs/us.json",
+  "ncoc": "puppeteer/providers/owncloud/ncoc/config.json",
+  "ocis": "puppeteer/providers/owncloud/ocis/config.json"
+}

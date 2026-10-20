@@ -55,20 +55,51 @@ jobs:
     name: Resolve branches
     runs-on: ubuntu-latest
     outputs:
-      docspaceEU: ${{ steps.resolve.outputs.docspaceEU }}
-      docspaceUS: ${{ steps.resolve.outputs.docspaceUS }}
+      docspaceEU: ${{ steps.docspaceEU.outputs.ref }}
+      docspaceUS: ${{ steps.docspaceUS.outputs.ref }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
-      - name: Resolve Dep.Tests branches
-        id: resolve
+      - name: Checkout provider configs of Dep.Tests
+        uses: actions/checkout@v7
+        with:
+          repository: ONLYOFFICE-data/Dep.Tests
+          path: Dep.Tests
+          sparse-checkout: puppeteer/providers
+          token: ${{ secrets.READ_PAT }}
+          fetch-depth: 1
+      - name: Read document servers of the providers
+        id: servers
         shell: bash
         run: |
           for p in docspaceEU docspaceUS; do
-            V=$(jq -r --arg p "$p" '.providers[$p] // "master"' .github/branches.json)
-            echo "$p -> $V"
-            echo "$p=$V" >> "$GITHUB_OUTPUT"
+            CONFIG=$(jq -r --arg p "$p" '.[$p] // empty' .github/providers.json)
+            if [ -z "$CONFIG" ]; then
+              echo "::error::Provider '$p' is not listed in .github/providers.json"
+              exit 1
+            fi
+            URL=$(jq -r '.testOptions.apiUrl // empty' "Dep.Tests/$CONFIG")
+            if [ -z "$URL" ]; then
+              echo "::error::Provider '$p': no testOptions.apiUrl in $CONFIG"
+              exit 1
+            fi
+            echo "$p -> $URL"
+            echo "$p=$URL" >> "$GITHUB_OUTPUT"
           done
+      - name: Resolve Dep.Tests ref - docspaceEU
+        id: docspaceEU
+        uses: ./.github/actions/resolve-tests-ref
+        with:
+          label: provider docspaceEU
+          server_url: ${{ steps.servers.outputs.docspaceEU }}
+          read_pat: ${{ secrets.READ_PAT }}
+      - name: Resolve Dep.Tests ref - docspaceUS
+        id: docspaceUS
+        uses: ./.github/actions/resolve-tests-ref
+        with:
+          label: provider docspaceUS
+          server_url: ${{ steps.servers.outputs.docspaceUS }}
+          read_pat: ${{ secrets.READ_PAT }}
 
   setup:
     runs-on: ubuntu-latest
