@@ -3,15 +3,14 @@
 Reference for the **Puppeteer DocServer test** workflow form (*Actions* → *Run workflow*).
 Each field is described with its purpose and effect. Sections follow the order of the form.
 
-The key idea: the **stand** selects the target server (the URL), and the **branch** selects
-the test code. They are independent, so the same branch can be run against different stands
-without editing any config by hand.
+The key idea: the **stand** selects the target server (the URL), and the build that server
+runs selects the test code - the `Dep.Tests` tag of the same version. The **branch** field
+overrides that choice, so any branch can be run against any stand without editing a config.
 
 ## 1. Use workflow from (`Branch:` selector)
 
 A native GitHub control, not a form input. It selects the branch of the `run-actions`
-repository used for the workflow definition, the composite actions (`.github/actions/...`),
-and the branch configuration (`.github/branches.json`).
+repository used for the workflow definition and the composite actions (`.github/actions/...`).
 
 This is the run-infrastructure branch, not the branch containing the tests. Leave it on
 `master` unless you are testing changes to the workflows or actions themselves.
@@ -29,13 +28,16 @@ is taken from a repository secret:
 The selected URL is written into the OS config (`testOptions.url` in `config_chrome_*.json`)
 before the run, so both the tests and the cleanup target that server.
 
-The stand also sets the **default** `Dep.Tests` branch (used only when the **branch** field
-is empty), via `.github/branches.json`:
+The stand also sets the **default** `Dep.Tests` ref (used only when the **branch** field is
+empty). The *Resolve branch* job reads the build the stand serves - `VersionNum="10.0.0.169"`
+in `web-apps/apps/documenteditor/main/app.js` - and checks out the `Dep.Tests` tag of the same
+release (`10.0.0`) whose build is not lower than the server's: `v10.0.0.169` when it exists,
+else the lowest later build of that release (`v10.0.0.172`, with a notice). A lower build or
+another release is never taken. The chosen tag is shown in the run summary.
 
-| Stand       | Default Dep.Tests branch |
-| ----------- | ------------------------ |
-| `kim`       | `master`                 |
-| `doc-linux` | `doc-linux`              |
+The job fails instead of guessing when the stand does not answer, when `app.js` has no
+`VersionNum`, or when `Dep.Tests` has no such tag. In the last case tag the tests for the
+build, or set the **branch** field.
 
 To run a branch against a different server, leave the stand set to that server and fill in
 the **branch** field (section 4).
@@ -45,15 +47,16 @@ settings.
 
 ## 3. Operating system to run on (required)
 
-`all`, `windows`, `linux`, or `macos`. Determines which runners the tests execute on. `all`
-runs on Windows, Linux, and macOS in parallel, producing three independent runs and three
-reports. A specific value runs on that operating system only.
+`windows`, `linux` (the default), or `macos`. Determines which runners the tests execute on:
+one run, one report, on that operating system only. There is no option for all three at once
+- the full set on three systems is too heavy for one run; to cover several, start the workflow
+once per system.
 
 ## 4. Dep.Tests branch override (optional)
 
-The name of a `Dep.Tests` branch to use instead of the stand default.
+The name of a `Dep.Tests` branch or tag to use instead of the stand default.
 
-- Empty: the branch bound to the selected stand is used (see section 2).
+- Empty: the tag of the build the stand runs is used (see section 2).
 - Set (for example `feature/my-tests`): the workflow switches to that branch, ignoring the
   stand default.
 
@@ -132,7 +135,7 @@ A failure to start the analysis is reported as a warning and does not fail the r
 
 1. **Use workflow from**: `master`.
 2. **Stand to test**: the target server (`kim` for release, `doc-linux` for hotfix).
-3. **Operating system**: `all`, or a single operating system.
+3. **Operating system**: `linux`, or another single operating system.
 4. Leave the remaining fields at their defaults.
 5. **Run workflow**.
 
@@ -151,18 +154,20 @@ default values, so pressing *Run workflow* without changing them is sufficient.
 
 | Selector                       | Selects               | Controls                                          |
 | ------------------------------ | --------------------- | ------------------------------------------------- |
-| **Use workflow from** (top)    | `run-actions` branch  | workflow code, actions, `branches.json`           |
-| **Stand**                      | target server         | server URL (from secret) and the default branch   |
-| **branch** field               | `Dep.Tests` branch    | the test code (overrides the stand default)       |
+| **Use workflow from** (top)    | `run-actions` branch  | workflow code, actions                            |
+| **Stand**                      | target server         | server URL (from secret) and, by its build, the default `Dep.Tests` tag |
+| **branch** field               | `Dep.Tests` ref       | the test code (overrides the stand default)       |
 
 ## Daily and Hourly workflows
 
 The **Daily** and **SaaS Hourly** workflows are structured similarly, with two differences:
 
 - There is no Stand field and no branch override. Several providers are tested at once
-  (docspaceEU, docspaceUS, ncoc, ocis). Each provider's branch is set statically in
-  `.github/branches.json` (the `providers` section), and each provider's server URL comes
-  from its own config, not from the stand secrets.
+  (docspaceEU, docspaceUS, ncoc, ocis), each with the `Dep.Tests` tag chosen by the build its
+  own document server runs - the same rule as a stand (section 2). The document server is
+  `testOptions.apiUrl` of the provider's config in `Dep.Tests` (read from `master`);
+  `.github/providers.json` names that config for each provider. A provider whose build has
+  no tag fails in *Resolve branches*, and its runs do not start.
 - They run on a schedule (cron) and can also be started manually via *Run workflow* with
   the same fields (operating system, test path, chunk size, clean, ReportPortal fields).
 - The auto-analyzer runs there as well, always on, in the same job that completes the launch.
