@@ -61,6 +61,11 @@ on:
         required: false
         default: true
         type: boolean
+      notify:
+        description: 'Send the Telegram notification'
+        required: false
+        default: true
+        type: boolean
 
 concurrency:
   group: puppeteer-docserver
@@ -405,7 +410,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.READ_PAT }}
 
       - name: Send comprehensive Telegram notification
-        if: always()
+        if: ${{ always() && inputs.notify }}
         shell: bash
         env:
           CHUNKS_JSON: ${{ steps.collect-chunks.outputs.chunks }}
@@ -487,7 +492,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.READ_PAT }}
 
       - name: Send comprehensive Telegram notification
-        if: always()
+        if: ${{ always() && inputs.notify }}
         shell: bash
         env:
           CHUNKS_JSON: ${{ steps.collect-chunks.outputs.chunks }}
@@ -569,7 +574,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.READ_PAT }}
 
       - name: Send comprehensive Telegram notification
-        if: always()
+        if: ${{ always() && inputs.notify }}
         shell: bash
         env:
           CHUNKS_JSON: ${{ steps.collect-chunks.outputs.chunks }}

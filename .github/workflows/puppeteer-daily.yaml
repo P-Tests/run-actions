@@ -45,6 +45,11 @@ on:
         required: false
         default: ''
         type: string
+      notify:
+        description: 'Send the Telegram notification'
+        required: false
+        default: true
+        type: boolean
 
 concurrency:
   group: puppeteer-stands
@@ -352,6 +357,7 @@ jobs:
           read_pat: ${{ secrets.READ_PAT }}
           telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
           telegram_to: ${{ secrets.TELEGRAM_TO }}
+          notify: ${{ github.event_name != 'workflow_dispatch' || inputs.notify }}
 
   post-docspaceEU-linux:
     name: Post - DocSpace EU - linux
@@ -374,6 +380,7 @@ jobs:
           read_pat: ${{ secrets.READ_PAT }}
           telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
           telegram_to: ${{ secrets.TELEGRAM_TO }}
+          notify: ${{ github.event_name != 'workflow_dispatch' || inputs.notify }}
 
   post-docspaceEU-macos:
     name: Post - DocSpace EU - macos
@@ -396,6 +403,7 @@ jobs:
           read_pat: ${{ secrets.READ_PAT }}
           telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
           telegram_to: ${{ secrets.TELEGRAM_TO }}
+          notify: ${{ github.event_name != 'workflow_dispatch' || inputs.notify }}
 
 
   prepare-docspaceUS:
@@ -595,6 +603,7 @@ jobs:
           read_pat: ${{ secrets.READ_PAT }}
           telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
           telegram_to: ${{ secrets.TELEGRAM_TO }}
+          notify: ${{ github.event_name != 'workflow_dispatch' || inputs.notify }}
 
   post-docspaceUS-linux:
     name: Post - DocSpace US - linux
@@ -617,6 +626,7 @@ jobs:
           read_pat: ${{ secrets.READ_PAT }}
           telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
           telegram_to: ${{ secrets.TELEGRAM_TO }}
+          notify: ${{ github.event_name != 'workflow_dispatch' || inputs.notify }}
 
   post-docspaceUS-macos:
     name: Post - DocSpace US - macos
@@ -639,6 +649,7 @@ jobs:
           read_pat: ${{ secrets.READ_PAT }}
           telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
           telegram_to: ${{ secrets.TELEGRAM_TO }}
+          notify: ${{ github.event_name != 'workflow_dispatch' || inputs.notify }}
 
 
   prepare-ncoc:
@@ -838,6 +849,7 @@ jobs:
           read_pat: ${{ secrets.READ_PAT }}
           telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
           telegram_to: ${{ secrets.TELEGRAM_TO }}
+          notify: ${{ github.event_name != 'workflow_dispatch' || inputs.notify }}
 
   post-ncoc-linux:
     name: Post - NCOC - linux
@@ -860,6 +872,7 @@ jobs:
           read_pat: ${{ secrets.READ_PAT }}
           telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
           telegram_to: ${{ secrets.TELEGRAM_TO }}
+          notify: ${{ github.event_name != 'workflow_dispatch' || inputs.notify }}
 
   post-ncoc-macos:
     name: Post - NCOC - macos
@@ -882,6 +895,7 @@ jobs:
           read_pat: ${{ secrets.READ_PAT }}
           telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
           telegram_to: ${{ secrets.TELEGRAM_TO }}
+          notify: ${{ github.event_name != 'workflow_dispatch' || inputs.notify }}
 
 
   prepare-ocis:
@@ -1081,6 +1095,7 @@ jobs:
           read_pat: ${{ secrets.READ_PAT }}
           telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
           telegram_to: ${{ secrets.TELEGRAM_TO }}
+          notify: ${{ github.event_name != 'workflow_dispatch' || inputs.notify }}
 
   post-ocis-linux:
     name: Post - OCIS - linux
@@ -1103,6 +1118,7 @@ jobs:
           read_pat: ${{ secrets.READ_PAT }}
           telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
           telegram_to: ${{ secrets.TELEGRAM_TO }}
+          notify: ${{ github.event_name != 'workflow_dispatch' || inputs.notify }}
 
   post-ocis-macos:
     name: Post - OCIS - macos
@@ -1125,6 +1141,7 @@ jobs:
           read_pat: ${{ secrets.READ_PAT }}
           telegram_token: ${{ secrets.TELEGRAM_TOKEN }}
           telegram_to: ${{ secrets.TELEGRAM_TO }}
+          notify: ${{ github.event_name != 'workflow_dispatch' || inputs.notify }}
 
 
   clean-docspaceEU:

@@ -34,6 +34,10 @@ inputs:
   telegram_to:
     description: 'Telegram chat ID'
     required: true
+  notify:
+    description: 'Send the Telegram notification'
+    required: false
+    default: 'true'
 
 runs:
   using: 'composite'
@@ -65,7 +69,7 @@ runs:
         GITHUB_TOKEN: ${{ inputs.read_pat }}
 
     - name: Send Telegram notification
-      if: ${{ always() && !cancelled() }}
+      if: ${{ always() && !cancelled() && inputs.notify == 'true' }}
       shell: bash
       run: |
         FAILED_COUNT=$(echo "$CHUNKS_JSON" | jq '[.[] | select(.conclusion == "failure")] | length')
