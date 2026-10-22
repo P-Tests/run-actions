@@ -1,0 +1,54 @@
+name: 'Collect Chunk Jobs'
+description: 'Read the status and conclusion of the chunk jobs of this run, waiting until GitHub reports all of them completed'
+
+inputs:
+  prefix:
+    description: 'Display-name prefix of the chunk jobs, e.g. "DocSpace EU - linux" or "Linux - Chunk"'
+    required: true
+  read_pat:
+    description: 'GitHub PAT for job status lookup'
+    required: true
+  attempts:
+    description: 'How many times to query the jobs API before giving up on jobs still reported unfinished'
+    required: false
+    default: '30'
+  interval:
+    description: 'Seconds between queries'
+    required: false
+    default: '20'
+
+outputs:
+  chunks:
+    description: 'JSON array of {name, status, conclusion, id, url} of the matching jobs'
+    value: ${{ steps.collect.outputs.chunks }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Collect chunk jobs info
+      id: collect
+      shell: bash
+      run: |
+        # The dependent job starts as soon as the chunks finish, but the jobs API can report a finished
+        # job as in_progress for minutes afterwards; poll until every matching job reads completed.
+        for attempt in $(seq 1 "$ATTEMPTS"); do
+          CHUNKS=$(gh run view "$RUN_ID" --json jobs \
+            | jq -c --arg prefix "$PREFIX" '[.jobs[] | select(.name | startswith($prefix)) | {name, status, conclusion, id: .databaseId, url}]')
+          PENDING=$(echo "$CHUNKS" | jq '[.[] | select(.status != "completed")] | length')
+          if [[ "$PENDING" -eq 0 ]]; then
+            break
+          fi
+          echo "Attempt $attempt/$ATTEMPTS: $PENDING chunk job(s) not reported completed yet"
+          if [[ "$attempt" -lt "$ATTEMPTS" ]]; then
+            sleep "$INTERVAL"
+          fi
+        done
+        echo "$CHUNKS" | jq .
+        echo "chunks=$CHUNKS" >> "$GITHUB_OUTPUT"
+      env:
+        PREFIX: ${{ inputs.prefix }}
+        ATTEMPTS: ${{ inputs.attempts }}
+        INTERVAL: ${{ inputs.interval }}
+        RUN_ID: ${{ github.run_id }}
+        GITHUB_TOKEN: ${{ inputs.read_pat }}
+        GH_REPO: ${{ github.repository }}
