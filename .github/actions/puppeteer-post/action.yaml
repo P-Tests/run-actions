@@ -58,15 +58,10 @@ runs:
       id: collect-chunks
       if: always()
       continue-on-error: true
-      shell: bash
-      run: |
-        JOBS_JSON=$(gh run view ${{ github.run_id }} --json jobs | jq '.jobs')
-        CHUNKS=$(echo "$JOBS_JSON" | jq -r --arg prefix "$JOB_PREFIX - $OS_NAME" '[.[] | select(.name | startswith($prefix))] | map({name: .name, status: .status, conclusion: .conclusion, id: .databaseId, url: .url}) | @json')
-        echo "chunks=$CHUNKS" >> $GITHUB_OUTPUT
-      env:
-        JOB_PREFIX: ${{ inputs.job_name_prefix }}
-        OS_NAME: ${{ inputs.os_name }}
-        GITHUB_TOKEN: ${{ inputs.read_pat }}
+      uses: ./.github/actions/collect-chunk-jobs
+      with:
+        prefix: ${{ inputs.job_name_prefix }} - ${{ inputs.os_name }}
+        read_pat: ${{ inputs.read_pat }}
 
     - name: Send Telegram notification
       if: ${{ always() && !cancelled() && inputs.notify == 'true' }}
@@ -76,6 +71,7 @@ runs:
         CANCELLED_COUNT=$(echo "$CHUNKS_JSON" | jq '[.[] | select(.conclusion == "cancelled")] | length')
         SUCCESS_COUNT=$(echo "$CHUNKS_JSON" | jq '[.[] | select(.conclusion == "success")] | length')
         TOTAL_COUNT=$(echo "$CHUNKS_JSON" | jq 'length')
+        PENDING_COUNT=$(echo "$CHUNKS_JSON" | jq '[.[] | select(.status != "completed")] | length')
 
         # Report to Telegram only when something is not green; skip on a clean full pass.
         if [[ "$SUCCESS_COUNT" -eq "$TOTAL_COUNT" && "$TOTAL_COUNT" -gt 0 ]]; then
@@ -88,6 +84,8 @@ runs:
           OVERALL_STATUS="\u274C Chunks failed (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
         elif [[ "$CANCELLED_COUNT" -gt 0 ]]; then
           OVERALL_STATUS="\u26D4 Some chunks cancelled (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
+        elif [[ "$PENDING_COUNT" -gt 0 ]]; then
+          OVERALL_STATUS="\u2753 GitHub did not report ${PENDING_COUNT} chunk(s) as completed (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
         elif [[ "$SUCCESS_COUNT" -eq "$TOTAL_COUNT" ]] && [[ "$TOTAL_COUNT" -gt 0 ]]; then
           OVERALL_STATUS="\u2705 All chunks passed (${TOTAL_COUNT}/${TOTAL_COUNT})"
         else

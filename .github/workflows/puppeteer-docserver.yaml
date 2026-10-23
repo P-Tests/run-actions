@@ -400,14 +400,10 @@ jobs:
         id: collect-chunks
         if: always()
         continue-on-error: true
-        shell: bash
-        run: |
-          JOBS_JSON=$(gh run view ${{ github.run_id }} --json jobs | jq '.jobs')
-
-          CHUNKS=$(echo "$JOBS_JSON" | jq -r '[.[] | select(.name | startswith("Windows - Chunk"))] | map({name: .name, status: .status, conclusion: .conclusion, id: .databaseId, url: .url}) | @json')
-          echo "chunks=$CHUNKS" >> $GITHUB_OUTPUT
-        env:
-          GITHUB_TOKEN: ${{ secrets.READ_PAT }}
+        uses: ./.github/actions/collect-chunk-jobs
+        with:
+          prefix: 'Windows - Chunk'
+          read_pat: ${{ secrets.READ_PAT }}
 
       - name: Send comprehensive Telegram notification
         if: ${{ always() && inputs.notify }}
@@ -422,6 +418,7 @@ jobs:
           CANCELLED_COUNT=$(echo "$CHUNKS_JSON" | jq '[.[] | select(.conclusion == "cancelled")] | length')
           SUCCESS_COUNT=$(echo "$CHUNKS_JSON" | jq '[.[] | select(.conclusion == "success")] | length')
           TOTAL_COUNT=$(echo "$CHUNKS_JSON" | jq 'length')
+          PENDING_COUNT=$(echo "$CHUNKS_JSON" | jq '[.[] | select(.status != "completed")] | length')
 
           # Report to Telegram only when something is not green; skip on a clean full pass.
           if [[ "$SUCCESS_COUNT" -eq "$TOTAL_COUNT" && "$TOTAL_COUNT" -gt 0 ]]; then
@@ -435,6 +432,8 @@ jobs:
             OVERALL_STATUS="❌ Chunks failed (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
           elif [[ "$CANCELLED_COUNT" -gt 0 ]]; then
             OVERALL_STATUS="🚫 Some chunks cancelled (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
+          elif [[ "$PENDING_COUNT" -gt 0 ]]; then
+            OVERALL_STATUS="❓ GitHub did not report ${PENDING_COUNT} chunk(s) as completed (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
           elif [[ "$SUCCESS_COUNT" -eq "$TOTAL_COUNT" ]] && [[ "$TOTAL_COUNT" -gt 0 ]]; then
             OVERALL_STATUS="✅ All chunks passed (${TOTAL_COUNT}/${TOTAL_COUNT})"
           else
@@ -482,14 +481,10 @@ jobs:
         id: collect-chunks
         if: always()
         continue-on-error: true
-        shell: bash
-        run: |
-          JOBS_JSON=$(gh run view ${{ github.run_id }} --json jobs | jq '.jobs')
-
-          CHUNKS=$(echo "$JOBS_JSON" | jq -r '[.[] | select(.name | startswith("Linux - Chunk"))] | map({name: .name, status: .status, conclusion: .conclusion, id: .databaseId, url: .url}) | @json')
-          echo "chunks=$CHUNKS" >> $GITHUB_OUTPUT
-        env:
-          GITHUB_TOKEN: ${{ secrets.READ_PAT }}
+        uses: ./.github/actions/collect-chunk-jobs
+        with:
+          prefix: 'Linux - Chunk'
+          read_pat: ${{ secrets.READ_PAT }}
 
       - name: Send comprehensive Telegram notification
         if: ${{ always() && inputs.notify }}
@@ -504,6 +499,7 @@ jobs:
           CANCELLED_COUNT=$(echo "$CHUNKS_JSON" | jq '[.[] | select(.conclusion == "cancelled")] | length')
           SUCCESS_COUNT=$(echo "$CHUNKS_JSON" | jq '[.[] | select(.conclusion == "success")] | length')
           TOTAL_COUNT=$(echo "$CHUNKS_JSON" | jq 'length')
+          PENDING_COUNT=$(echo "$CHUNKS_JSON" | jq '[.[] | select(.status != "completed")] | length')
 
           # Report to Telegram only when something is not green; skip on a clean full pass.
           if [[ "$SUCCESS_COUNT" -eq "$TOTAL_COUNT" && "$TOTAL_COUNT" -gt 0 ]]; then
@@ -517,6 +513,8 @@ jobs:
             OVERALL_STATUS="❌ Chunks failed (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
           elif [[ "$CANCELLED_COUNT" -gt 0 ]]; then
             OVERALL_STATUS="🚫 Some chunks cancelled (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
+          elif [[ "$PENDING_COUNT" -gt 0 ]]; then
+            OVERALL_STATUS="❓ GitHub did not report ${PENDING_COUNT} chunk(s) as completed (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
           elif [[ "$SUCCESS_COUNT" -eq "$TOTAL_COUNT" ]] && [[ "$TOTAL_COUNT" -gt 0 ]]; then
             OVERALL_STATUS="✅ All chunks passed (${TOTAL_COUNT}/${TOTAL_COUNT})"
           else
@@ -564,14 +562,10 @@ jobs:
         id: collect-chunks
         if: always()
         continue-on-error: true
-        shell: bash
-        run: |
-          JOBS_JSON=$(gh run view ${{ github.run_id }} --json jobs | jq '.jobs')
-
-          CHUNKS=$(echo "$JOBS_JSON" | jq -r '[.[] | select(.name | startswith("macOS - Chunk"))] | map({name: .name, status: .status, conclusion: .conclusion, id: .databaseId, url: .url}) | @json')
-          echo "chunks=$CHUNKS" >> $GITHUB_OUTPUT
-        env:
-          GITHUB_TOKEN: ${{ secrets.READ_PAT }}
+        uses: ./.github/actions/collect-chunk-jobs
+        with:
+          prefix: 'macOS - Chunk'
+          read_pat: ${{ secrets.READ_PAT }}
 
       - name: Send comprehensive Telegram notification
         if: ${{ always() && inputs.notify }}
@@ -586,6 +580,7 @@ jobs:
           CANCELLED_COUNT=$(echo "$CHUNKS_JSON" | jq '[.[] | select(.conclusion == "cancelled")] | length')
           SUCCESS_COUNT=$(echo "$CHUNKS_JSON" | jq '[.[] | select(.conclusion == "success")] | length')
           TOTAL_COUNT=$(echo "$CHUNKS_JSON" | jq 'length')
+          PENDING_COUNT=$(echo "$CHUNKS_JSON" | jq '[.[] | select(.status != "completed")] | length')
 
           # Report to Telegram only when something is not green; skip on a clean full pass.
           if [[ "$SUCCESS_COUNT" -eq "$TOTAL_COUNT" && "$TOTAL_COUNT" -gt 0 ]]; then
@@ -599,6 +594,8 @@ jobs:
             OVERALL_STATUS="❌ Chunks failed (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
           elif [[ "$CANCELLED_COUNT" -gt 0 ]]; then
             OVERALL_STATUS="🚫 Some chunks cancelled (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
+          elif [[ "$PENDING_COUNT" -gt 0 ]]; then
+            OVERALL_STATUS="❓ GitHub did not report ${PENDING_COUNT} chunk(s) as completed (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
           elif [[ "$SUCCESS_COUNT" -eq "$TOTAL_COUNT" ]] && [[ "$TOTAL_COUNT" -gt 0 ]]; then
             OVERALL_STATUS="✅ All chunks passed (${TOTAL_COUNT}/${TOTAL_COUNT})"
           else
