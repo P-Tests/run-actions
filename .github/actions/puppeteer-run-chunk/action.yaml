@@ -120,10 +120,10 @@ runs:
       id: cache-puppeteer
       uses: actions/cache@v5
       with:
-        path: ~/.cache/puppeteer
-        key: ${{ runner.os }}-${{ runner.arch }}-puppeteer-chrome-${{ hashFiles('Dep.Tests/puppeteer/engine/package-lock.json') }}
+        path: Dep.Tests/puppeteer/engine/browser/puppeteer
+        key: ${{ runner.os }}-${{ runner.arch }}-puppeteer-engine-chrome-${{ hashFiles('Dep.Tests/puppeteer/engine/package-lock.json') }}
         restore-keys: |
-          ${{ runner.os }}-${{ runner.arch }}-puppeteer-chrome-
+          ${{ runner.os }}-${{ runner.arch }}-puppeteer-engine-chrome-
 
     - name: Install Chrome for Puppeteer
       if: steps.cache-puppeteer.outputs.cache-hit != 'true'
@@ -174,7 +174,7 @@ runs:
       if: runner.os == 'Linux'
       shell: bash
       run: |
-        CHROME_DIR=$(find ~/.cache/puppeteer/chrome -name "linux-*" -type d 2>/dev/null | head -n 1 || true)
+        CHROME_DIR=$(find Dep.Tests/puppeteer/engine/browser/puppeteer/chrome -name "linux-*" -type d 2>/dev/null | head -n 1 || true)
         if [ -n "$CHROME_DIR" ]; then
           cd "$CHROME_DIR/chrome-linux64/"
           sudo chown root:root chrome_sandbox
