@@ -35,7 +35,7 @@ inputs:
     description: 'Telegram chat ID'
     required: true
   notify:
-    description: 'Send the Telegram notification'
+    description: 'Send the Telegram notification: on a scheduled run only when the result differs from the previous scheduled run'
     required: false
     default: 'true'
 
@@ -63,8 +63,66 @@ runs:
         prefix: ${{ inputs.job_name_prefix }} - ${{ inputs.os_name }}
         read_pat: ${{ inputs.read_pat }}
 
-    - name: Send Telegram notification
+    - name: Compare with the previous scheduled run
+      id: compare
       if: ${{ always() && !cancelled() && inputs.notify == 'true' }}
+      # A lookup that fails leaves `send` empty, and the notification goes out: a duplicate beats a lost report.
+      continue-on-error: true
+      shell: bash
+      run: |
+        # The result of a run is which of its chunks did not pass; the same set as last time is nothing new.
+        signature() {
+          jq -c '{ran: (length > 0), problems: ([.[] | select(.conclusion != "success") | "\(.name): \(.conclusion // .status)"] | sort)}'
+        }
+        CURRENT=$(signature <<< "$CHUNKS_JSON")
+        GREEN=$(jq '.ran and (.problems | length == 0)' <<< "$CURRENT")
+
+        # A manual run (a subset, another branch) is no baseline and has none: it reports as before, when not green.
+        if [[ "$EVENT_NAME" != "schedule" ]]; then
+          [[ "$GREEN" == "true" ]] && SEND=false || SEND=true
+          echo "Not a scheduled run - send=$SEND"
+          echo "send=$SEND" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        WORKFLOW_ID=$(gh api "repos/$GH_REPO/actions/runs/$RUN_ID" --jq '.workflow_id')
+        PREVIOUS=""
+        PREVIOUS_URL=""
+        for PREVIOUS_ID in $(gh api "repos/$GH_REPO/actions/workflows/$WORKFLOW_ID/runs?event=schedule&per_page=10" \
+            --jq ".workflow_runs[] | select(.id < $RUN_ID) | .id"); do
+          JOBS=$(gh run view "$PREVIOUS_ID" --json jobs \
+            | jq -c --arg prefix "$PREFIX" '[.jobs[] | select(.name | startswith($prefix)) | {name, status, conclusion}]')
+          if [[ "$(jq 'length > 0 and all(.status == "completed")' <<< "$JOBS")" == "true" ]]; then
+            PREVIOUS=$(signature <<< "$JOBS")
+            PREVIOUS_URL="${{ github.server_url }}/$GH_REPO/actions/runs/$PREVIOUS_ID"
+            break
+          fi
+        done
+
+        if [[ -z "$PREVIOUS" ]]; then
+          [[ "$GREEN" == "true" ]] && SEND=false || SEND=true
+          echo "No previous scheduled run of '$PREFIX' - send=$SEND"
+        elif [[ "$PREVIOUS" == "$CURRENT" ]]; then
+          SEND=false
+          echo "Same result as $PREVIOUS_URL - skipping Telegram notification"
+        else
+          SEND=true
+          echo "Result changed since $PREVIOUS_URL"
+          echo "previous: $PREVIOUS"
+          echo "current:  $CURRENT"
+        fi
+        echo "send=$SEND" >> "$GITHUB_OUTPUT"
+        echo "previous_url=$PREVIOUS_URL" >> "$GITHUB_OUTPUT"
+      env:
+        CHUNKS_JSON: ${{ steps.collect-chunks.outputs.chunks }}
+        PREFIX: ${{ inputs.job_name_prefix }} - ${{ inputs.os_name }}
+        EVENT_NAME: ${{ github.event_name }}
+        RUN_ID: ${{ github.run_id }}
+        GITHUB_TOKEN: ${{ inputs.read_pat }}
+        GH_REPO: ${{ github.repository }}
+
+    - name: Send Telegram notification
+      if: ${{ always() && !cancelled() && inputs.notify == 'true' && steps.compare.outputs.send != 'false' }}
       shell: bash
       run: |
         FAILED_COUNT=$(echo "$CHUNKS_JSON" | jq '[.[] | select(.conclusion == "failure")] | length')
@@ -73,11 +131,6 @@ runs:
         TOTAL_COUNT=$(echo "$CHUNKS_JSON" | jq 'length')
         PENDING_COUNT=$(echo "$CHUNKS_JSON" | jq '[.[] | select(.status != "completed")] | length')
 
-        # Report to Telegram only when something is not green; skip on a clean full pass.
-        if [[ "$SUCCESS_COUNT" -eq "$TOTAL_COUNT" && "$TOTAL_COUNT" -gt 0 ]]; then
-          echo "All chunks passed - skipping Telegram notification"
-          exit 0
-        fi
         if [[ "$TOTAL_COUNT" -eq 0 ]]; then
           OVERALL_STATUS="\u274C Tests did not run - an upstream job failed"
         elif [[ "$FAILED_COUNT" -gt 0 ]]; then
@@ -94,6 +147,7 @@ runs:
         MESSAGE="\n*Workflow:* ${{ github.workflow }}\n*Provider:* $PROVIDER\n*OS:* $OS_NAME\n*Status:* ${OVERALL_STATUS}"
         MESSAGE="${MESSAGE}\n[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
         if [[ -n "$RP_URL" ]]; then MESSAGE="${MESSAGE}\n[View Report Portal](${RP_URL})"; fi
+        if [[ -n "$PREVIOUS_URL" ]]; then MESSAGE="${MESSAGE}\n[Previous Run](${PREVIOUS_URL})"; fi
         MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')
         curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
           -H "Content-Type: application/json" \
@@ -103,6 +157,7 @@ runs:
         PROVIDER: ${{ inputs.provider }}
         OS_NAME: ${{ inputs.os_name }}
         RP_URL: ${{ steps.finish.outputs.rp_launch_url }}
+        PREVIOUS_URL: ${{ steps.compare.outputs.previous_url }}
         TELEGRAM_TOKEN: ${{ inputs.telegram_token }}
         TELEGRAM_TO: ${{ inputs.telegram_to }}
         GITHUB_TOKEN: ${{ inputs.read_pat }}
