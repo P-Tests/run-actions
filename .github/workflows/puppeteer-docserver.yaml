@@ -12,6 +12,7 @@ on:
         options:
           - kim
           - doc-linux
+          - saul
       os:
         description: 'Operating system to run on'
         required: true
@@ -85,7 +86,7 @@ jobs:
         uses: ./.github/actions/resolve-tests-ref
         with:
           label: stand ${{ inputs.url }}
-          server_url: ${{ inputs.url == 'kim' && secrets.URL_RELEASE || secrets.URL_HOTFIX }}
+          server_url: ${{ inputs.url == 'kim' && secrets.URL_RELEASE || inputs.url == 'saul' && secrets.SAUL_TEAMLAB || secrets.URL_HOTFIX }}
           branch: ${{ inputs.branch }}
           read_pat: ${{ secrets.READ_PAT }}
 
@@ -174,7 +175,7 @@ jobs:
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           branch: ${{ needs.prepare.outputs.branch }}
           test_path: ${{ inputs.test_path }}
-          url: ${{ inputs.url == 'kim' && secrets.URL_RELEASE || secrets.URL_HOTFIX }}
+          url: ${{ inputs.url == 'kim' && secrets.URL_RELEASE || inputs.url == 'saul' && secrets.SAUL_TEAMLAB || secrets.URL_HOTFIX }}
 
   run-tests-windows:
     name: Windows - Chunk ${{ matrix.chunk }}
@@ -204,7 +205,7 @@ jobs:
           branch: ${{ needs.prepare.outputs.branch }}
           test_path: ${{ inputs.test_path }}
           clean: ${{ inputs.clean }}
-          url: ${{ inputs.url == 'kim' && secrets.URL_RELEASE || secrets.URL_HOTFIX }}
+          url: ${{ inputs.url == 'kim' && secrets.URL_RELEASE || inputs.url == 'saul' && secrets.SAUL_TEAMLAB || secrets.URL_HOTFIX }}
 
   finish-launch-windows:
     name: Finish Windows Launch
@@ -252,7 +253,7 @@ jobs:
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           branch: ${{ needs.prepare.outputs.branch }}
           test_path: ${{ inputs.test_path }}
-          url: ${{ inputs.url == 'kim' && secrets.URL_RELEASE || secrets.URL_HOTFIX }}
+          url: ${{ inputs.url == 'kim' && secrets.URL_RELEASE || inputs.url == 'saul' && secrets.SAUL_TEAMLAB || secrets.URL_HOTFIX }}
 
   run-tests-linux:
     name: Linux - Chunk ${{ matrix.chunk }}
@@ -282,7 +283,7 @@ jobs:
           branch: ${{ needs.prepare.outputs.branch }}
           test_path: ${{ inputs.test_path }}
           clean: ${{ inputs.clean }}
-          url: ${{ inputs.url == 'kim' && secrets.URL_RELEASE || secrets.URL_HOTFIX }}
+          url: ${{ inputs.url == 'kim' && secrets.URL_RELEASE || inputs.url == 'saul' && secrets.SAUL_TEAMLAB || secrets.URL_HOTFIX }}
 
   finish-launch-linux:
     name: Finish Linux Launch
@@ -330,7 +331,7 @@ jobs:
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           branch: ${{ needs.prepare.outputs.branch }}
           test_path: ${{ inputs.test_path }}
-          url: ${{ inputs.url == 'kim' && secrets.URL_RELEASE || secrets.URL_HOTFIX }}
+          url: ${{ inputs.url == 'kim' && secrets.URL_RELEASE || inputs.url == 'saul' && secrets.SAUL_TEAMLAB || secrets.URL_HOTFIX }}
 
   run-tests-macos:
     name: macOS - Chunk ${{ matrix.chunk }}
@@ -360,7 +361,7 @@ jobs:
           branch: ${{ needs.prepare.outputs.branch }}
           test_path: ${{ inputs.test_path }}
           clean: ${{ inputs.clean }}
-          url: ${{ inputs.url == 'kim' && secrets.URL_RELEASE || secrets.URL_HOTFIX }}
+          url: ${{ inputs.url == 'kim' && secrets.URL_RELEASE || inputs.url == 'saul' && secrets.SAUL_TEAMLAB || secrets.URL_HOTFIX }}
 
   finish-launch-macos:
     name: Finish macOS Launch

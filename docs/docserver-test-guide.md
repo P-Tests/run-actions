@@ -17,13 +17,14 @@ This is the run-infrastructure branch, not the branch containing the tests. Leav
 
 ## 2. Stand to test (required)
 
-Dropdown of stands: `kim` or `doc-linux`. The stand selects the **target server**. Its URL
+Dropdown of stands: `kim`, `doc-linux` or `saul`. The stand selects the **target server**. Its URL
 is taken from a repository secret:
 
 | Stand       | Server     | Secret         |
 | ----------- | ---------- | -------------- |
 | `kim`       | release    | `URL_RELEASE`  |
 | `doc-linux` | hotfix     | `URL_HOTFIX`   |
+| `saul`      | teamlab    | `SAUL_TEAMLAB` |
 
 The selected URL is written into the OS config (`testOptions.url` in `config_chrome_*.json`)
 before the run, so both the tests and the cleanup target that server.
