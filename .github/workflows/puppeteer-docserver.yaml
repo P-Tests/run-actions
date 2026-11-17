@@ -1,5 +1,5 @@
-﻿name: Puppeteer DocServer test - Desktop
-run-name: Puppeteer DocServer test - Desktop - ${{ inputs.test_path && format('{0} - ', inputs.test_path) || '' }}${{ inputs.url }} - ${{ inputs.os == 'all' && 'all OS' || inputs.os }}
+﻿name: Puppeteer DocServer test - Desktop Web
+run-name: Puppeteer DocServer test - Desktop Web - ${{ inputs.test_path && format('{0} - ', inputs.test_path) || '' }}${{ inputs.url }} - ${{ inputs.os == 'all' && 'all OS' || inputs.os }}
 
 # The desktop tests of a stand. The mobile tests are run by puppeteer-mobile.yaml, on linux only.
 on:
