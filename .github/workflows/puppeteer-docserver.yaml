@@ -1,6 +1,7 @@
-﻿name: Puppeteer DocServer test
-run-name: Puppeteer DocServer test - ${{ inputs.test_path || format('{0} tests', inputs.ui_type) }} - ${{ inputs.url }} - ${{ inputs.os == 'all' && 'all OS' || inputs.os }}
+﻿name: Puppeteer DocServer test - Desktop
+run-name: Puppeteer DocServer test - Desktop - ${{ inputs.test_path && format('{0} - ', inputs.test_path) || '' }}${{ inputs.url }} - ${{ inputs.os == 'all' && 'all OS' || inputs.os }}
 
+# The desktop tests of a stand. The mobile tests are run by puppeteer-mobile.yaml, on linux only.
 on:
   workflow_dispatch:
     inputs:
@@ -23,21 +24,13 @@ on:
           - windows
           - linux
           - macos
-      ui_type:
-        description: 'Tests to run: the ones of one UI type'
-        required: true
-        default: 'desktop'
-        type: choice
-        options:
-          - desktop
-          - mobile
       branch:
         description: 'Dep.Tests branch or tag override — leave empty to use the tag of the stand build'
         required: false
         default: ''
         type: string
       test_path:
-        description: 'Specific test file or directory'
+        description: 'Specific test file or directory inside tests/web/desktop'
         required: false
         default: ''
         type: string
@@ -78,7 +71,8 @@ on:
         type: boolean
 
 # One run at a time; the ones started meanwhile wait in the queue in the order they came (up to 100),
-# instead of the newest one replacing the one already waiting.
+# instead of the newest one replacing the one already waiting. puppeteer-mobile.yaml is in the same group:
+# it loads the same stands.
 concurrency:
   group: puppeteer-docserver
   cancel-in-progress: false
@@ -128,7 +122,7 @@ jobs:
           branch: ${{ needs.branch-config.outputs.branch }}
           read_pat: ${{ secrets.READ_PAT }}
           test_path: ${{ inputs.test_path }}
-          ui_type: ${{ inputs.ui_type }}
+          ui_type: desktop
 
       - name: Name the ReportPortal launch
         id: launch
@@ -136,13 +130,12 @@ jobs:
         env:
           LAUNCH_NAME: ${{ inputs.launch_name }}
           TEST_PATH: ${{ inputs.test_path }}
-          UI_TYPE: ${{ inputs.ui_type }}
         run: |
           if [ -z "$LAUNCH_NAME" ]; then
             if [ -n "$TEST_PATH" ]; then
               LAUNCH_NAME="Github Action Target Tests"
             else
-              LAUNCH_NAME="Github Action ${UI_TYPE^} Tests"
+              LAUNCH_NAME="Github Action Desktop Tests"
             fi
           fi
           echo "name=$LAUNCH_NAME" >> "$GITHUB_OUTPUT"

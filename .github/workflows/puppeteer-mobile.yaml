@@ -1,0 +1,304 @@
+name: Puppeteer DocServer test - Mobile Web
+run-name: Puppeteer DocServer test - Mobile Web - ${{ inputs.test_path && format('{0} - ', inputs.test_path) || '' }}${{ inputs.url }}
+
+# The mobile tests of a stand. They run in a device Chrome emulates, so the system of the runner changes
+# nothing in them: the run takes linux only and the form has no operating system to choose.
+# The desktop tests are run by puppeteer-docserver.yaml.
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'Stand to test'
+        required: true
+        default: kim
+        type: choice
+        options:
+          - kim
+          - doc-linux
+          - saul
+      branch:
+        description: 'Dep.Tests branch or tag override — leave empty to use the tag of the stand build'
+        required: false
+        default: ''
+        type: string
+      test_path:
+        description: 'Specific test file or directory inside tests/web/mobile'
+        required: false
+        default: ''
+        type: string
+      chunk_size:
+        description: 'Tests per parallel chunk'
+        required: false
+        default: '100'
+        type: string
+      clean:
+        description: 'Clear test files from the remote server after each chunk'
+        required: false
+        default: true
+        type: boolean
+      project_name:
+        description: 'ReportPortal project name'
+        required: false
+        default: 'docsserver'
+        type: string
+      launch_name:
+        description: 'ReportPortal launch name'
+        required: false
+        default: ''
+        type: string
+      api_key:
+        description: 'ReportPortal API key'
+        required: false
+        default: ''
+        type: string
+      analyze:
+        description: 'Run the ReportPortal auto-analyzer when the launch is complete'
+        required: false
+        default: true
+        type: boolean
+      notify:
+        description: 'Send the Telegram notification'
+        required: false
+        default: true
+        type: boolean
+
+# The group of puppeteer-docserver.yaml: both workflows load the same stands, so a mobile run and a desktop
+# one wait for each other in one queue (up to 100 runs, in the order they came).
+concurrency:
+  group: puppeteer-docserver
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  branch-config:
+    name: Resolve branch
+    runs-on: ubuntu-latest
+    outputs:
+      branch: ${{ steps.resolve.outputs.ref }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Resolve Dep.Tests ref from the branch or the stand build
+        id: resolve
+        uses: ./.github/actions/resolve-tests-ref
+        with:
+          label: stand ${{ inputs.url }}
+          server_url: ${{ inputs.url == 'kim' && secrets.URL_RELEASE || inputs.url == 'saul' && secrets.SAUL_TEAMLAB || secrets.URL_HOTFIX }}
+          branch: ${{ inputs.branch }}
+          read_pat: ${{ secrets.READ_PAT }}
+
+  prepare:
+    name: Prepare Test Matrix
+    needs: [branch-config]
+    runs-on: ubuntu-latest
+    outputs:
+      branch: ${{ needs.branch-config.outputs.branch }}
+      matrix: ${{ steps.prepare.outputs.matrix }}
+      num_chunks: ${{ steps.prepare.outputs.num_chunks }}
+      chunk_size: ${{ steps.prepare.outputs.chunk_size }}
+      test_path: ${{ steps.prepare.outputs.test_path }}
+      ui_type: ${{ steps.prepare.outputs.ui_type }}
+      launch_name: ${{ steps.launch.outputs.name }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Prepare test matrix
+        id: prepare
+        uses: ./.github/actions/puppeteer-prepare
+        with:
+          provider: example
+          chunk_size: ${{ inputs.chunk_size }}
+          branch: ${{ needs.branch-config.outputs.branch }}
+          read_pat: ${{ secrets.READ_PAT }}
+          test_path: ${{ inputs.test_path }}
+          ui_type: mobile
+
+      - name: Name the ReportPortal launch
+        id: launch
+        shell: bash
+        env:
+          LAUNCH_NAME: ${{ inputs.launch_name }}
+          TEST_PATH: ${{ inputs.test_path }}
+        run: |
+          if [ -z "$LAUNCH_NAME" ]; then
+            if [ -n "$TEST_PATH" ]; then
+              LAUNCH_NAME="Github Action Target Tests"
+            else
+              LAUNCH_NAME="Github Action Mobile Tests"
+            fi
+          fi
+          echo "name=$LAUNCH_NAME" >> "$GITHUB_OUTPUT"
+
+  install-deps-linux:
+    name: Install dependencies - linux
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+      - name: Install dependencies and populate caches
+        uses: ./.github/actions/puppeteer-install-deps
+        with:
+          read_pat: ${{ secrets.READ_PAT }}
+
+  start-launch-linux:
+    name: Start Linux Launch
+    needs: [prepare]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Start launch
+        uses: ./.github/actions/rp-start-launch
+        with:
+          provider: example
+          os_name: linux
+          os_config: config_chrome_linux.json
+          project_name: ${{ inputs.project_name || 'docsserver' }}
+          launch_name: ${{ needs.prepare.outputs.launch_name }}
+          ui_type: ${{ needs.prepare.outputs.ui_type }}
+          read_pat: ${{ secrets.READ_PAT }}
+          report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          branch: ${{ needs.prepare.outputs.branch }}
+          test_path: ${{ needs.prepare.outputs.test_path }}
+          url: ${{ inputs.url == 'kim' && secrets.URL_RELEASE || inputs.url == 'saul' && secrets.SAUL_TEAMLAB || secrets.URL_HOTFIX }}
+
+  run-tests-linux:
+    name: Linux - Chunk ${{ matrix.chunk }}
+    needs: [prepare, install-deps-linux, start-launch-linux]
+    if: "!cancelled() && needs.start-launch-linux.result == 'success'"
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        chunk: ${{ fromJson(needs.prepare.outputs.matrix).chunk }}
+      fail-fast: false
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Run tests
+        uses: ./.github/actions/puppeteer-run-chunk
+        with:
+          provider: example
+          chunk_id: ${{ matrix.chunk }}
+          chunk_size: ${{ needs.prepare.outputs.chunk_size }}
+          os_name: linux
+          os_config: config_chrome_linux.json
+          project_name: ${{ inputs.project_name || 'docsserver' }}
+          read_pat: ${{ secrets.READ_PAT }}
+          report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          branch: ${{ needs.prepare.outputs.branch }}
+          test_path: ${{ needs.prepare.outputs.test_path }}
+          clean: ${{ inputs.clean }}
+          url: ${{ inputs.url == 'kim' && secrets.URL_RELEASE || inputs.url == 'saul' && secrets.SAUL_TEAMLAB || secrets.URL_HOTFIX }}
+
+  finish-launch-linux:
+    name: Finish Linux Launch
+    needs: [prepare, start-launch-linux, run-tests-linux]
+    runs-on: ubuntu-latest
+    if: "always() && needs.start-launch-linux.result == 'success'"
+    outputs:
+      rp_launch_url: ${{ steps.finish.outputs.rp_launch_url }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Finish launch
+        id: finish
+        uses: ./.github/actions/rp-finish-launch
+        with:
+          provider: example
+          os_name: linux
+          project_name: ${{ inputs.project_name || 'docsserver' }}
+          api_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
+          read_pat: ${{ secrets.READ_PAT }}
+          branch: ${{ needs.prepare.outputs.branch }}
+          analyze: ${{ inputs.analyze }}
+
+  final-summary-linux:
+    name: Linux Test Summary
+    needs: [prepare, finish-launch-linux]
+    runs-on: ubuntu-latest
+    if: "!cancelled()"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Collect Linux chunk jobs info
+        id: collect-chunks
+        if: always()
+        continue-on-error: true
+        uses: ./.github/actions/collect-chunk-jobs
+        with:
+          prefix: 'Linux - Chunk'
+          read_pat: ${{ secrets.READ_PAT }}
+
+      - name: Send comprehensive Telegram notification
+        if: ${{ always() && inputs.notify }}
+        shell: bash
+        env:
+          CHUNKS_JSON: ${{ steps.collect-chunks.outputs.chunks }}
+          RP_URL: ${{ needs.finish-launch-linux.outputs.rp_launch_url }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
+        run: |
+          FAILED_COUNT=$(echo "$CHUNKS_JSON" | jq '[.[] | select(.conclusion == "failure")] | length')
+          CANCELLED_COUNT=$(echo "$CHUNKS_JSON" | jq '[.[] | select(.conclusion == "cancelled")] | length')
+          SUCCESS_COUNT=$(echo "$CHUNKS_JSON" | jq '[.[] | select(.conclusion == "success")] | length')
+          TOTAL_COUNT=$(echo "$CHUNKS_JSON" | jq 'length')
+          PENDING_COUNT=$(echo "$CHUNKS_JSON" | jq '[.[] | select(.status != "completed")] | length')
+
+          # Report to Telegram only when something is not green; skip on a clean full pass.
+          if [[ "$SUCCESS_COUNT" -eq "$TOTAL_COUNT" && "$TOTAL_COUNT" -gt 0 ]]; then
+            echo "All chunks passed - skipping Telegram notification"
+            exit 0
+          fi
+
+          if [[ "$TOTAL_COUNT" -eq 0 ]]; then
+            OVERALL_STATUS="❌ Tests did not run - an upstream job failed"
+          elif [[ "$FAILED_COUNT" -gt 0 ]]; then
+            OVERALL_STATUS="❌ Chunks failed (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
+          elif [[ "$CANCELLED_COUNT" -gt 0 ]]; then
+            OVERALL_STATUS="🚫 Some chunks cancelled (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
+          elif [[ "$PENDING_COUNT" -gt 0 ]]; then
+            OVERALL_STATUS="❓ GitHub did not report ${PENDING_COUNT} chunk(s) as completed (${SUCCESS_COUNT}/${TOTAL_COUNT} passed)"
+          elif [[ "$SUCCESS_COUNT" -eq "$TOTAL_COUNT" ]] && [[ "$TOTAL_COUNT" -gt 0 ]]; then
+            OVERALL_STATUS="✅ All chunks passed (${TOTAL_COUNT}/${TOTAL_COUNT})"
+          else
+            OVERALL_STATUS="❓ Chunks status unknown"
+          fi
+
+          MESSAGE="${MESSAGE}\n*Workflow:* ${{ github.workflow }}"
+          MESSAGE="${MESSAGE}\n*Provider:* example"
+          MESSAGE="${MESSAGE}\n*Platform:* linux"
+          MESSAGE="${MESSAGE}\n*Browser:* chrome"
+          MESSAGE="${MESSAGE}\n*Branch:* ${{ needs.prepare.outputs.branch }}"
+          MESSAGE="${MESSAGE}\n*Stand:* ${{ inputs.url }}"
+          MESSAGE="${MESSAGE}\n*Tests:* ${{ needs.prepare.outputs.ui_type }}"
+          MESSAGE="${MESSAGE}\n*Status:* ${OVERALL_STATUS}"
+          MESSAGE="${MESSAGE}\n"
+
+          MESSAGE="${MESSAGE}\n[View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+
+          if [[ -n "$RP_URL" ]]; then
+            MESSAGE="${MESSAGE}\n[View Report Portal](${RP_URL})"
+          fi
+
+          MESSAGE=$(echo "$MESSAGE" | sed 's/"/\\"/g')
+
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"chat_id\": \"${TELEGRAM_TO}\",
+              \"text\": \"$MESSAGE\",
+              \"parse_mode\": \"Markdown\",
+              \"disable_notification\": true,
+              \"disable_web_page_preview\": true
+            }"

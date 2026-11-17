@@ -21,7 +21,7 @@ inputs:
     required: false
     default: ''
   ui_type:
-    description: 'UI type whose tests run when no test_path is given: a folder of tests/web (desktop, mobile), or all for every test'
+    description: 'UI type whose tests run: a folder of tests/web (desktop, mobile) - test_path, when given, has to be inside it - or all for every test and any test_path'
     required: false
     default: 'all'
   suite:
@@ -34,7 +34,7 @@ outputs:
     description: 'Path the run takes: test_path as given, else the folder of the UI type, empty for all tests'
     value: ${{ steps.tests.outputs.test_path }}
   ui_type:
-    description: 'UI type of the tests the run takes: the one of test_path when it is given, else the one asked for'
+    description: 'UI type of the tests the run takes: the one asked for, or with all the one of test_path when it is given'
     value: ${{ steps.tests.outputs.ui_type }}
   matrix:
     description: 'Test matrix for chunks'
@@ -100,14 +100,15 @@ runs:
         TEST_PATH: ${{ inputs.test_path }}
       run: |
         if [ -n "$TEST_PATH" ]; then
-          # A given path decides the type, whatever was asked for: the tests/web/<type> folder it is in,
-          # all when it is above one.
+          # The type of a given path: the tests/web/<type> folder it is in, all when it is above one.
           PATH_TYPE=all
           if [[ "${TEST_PATH//\\//}" =~ (^|/)web/([^/]+)(/|$) ]]; then
             PATH_TYPE="${BASH_REMATCH[2]}"
           fi
+          # A run of one type takes the systems and the launch of that type: a path of another one is refused.
           if [ "$UI_TYPE" != "all" ] && [ "$UI_TYPE" != "$PATH_TYPE" ]; then
-            echo "::notice::test_path '$TEST_PATH' holds $PATH_TYPE tests: the UI type '$UI_TYPE' of the run is not used"
+            echo "::error::test_path '$TEST_PATH' is not inside tests/web/$UI_TYPE: this workflow runs the $UI_TYPE tests only, the tests of another UI type have a workflow of their own"
+            exit 1
           fi
           UI_TYPE="$PATH_TYPE"
         elif [ "$UI_TYPE" != "all" ]; then
