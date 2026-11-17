@@ -41,7 +41,7 @@ The job fails instead of guessing when the stand does not answer, when `app.js` 
 build, or set the **branch** field.
 
 To run a branch against a different server, leave the stand set to that server and fill in
-the **branch** field (section 4).
+the **branch** field (section 5).
 
 The secrets `URL_RELEASE` and `URL_HOTFIX` must be defined in the `run-actions` repository
 settings.
@@ -53,7 +53,31 @@ one run, one report, on that operating system only. There is no option for all t
 - the full set on three systems is too heavy for one run; to cover several, start the workflow
 once per system.
 
-## 4. Dep.Tests branch override (optional)
+## 4. Tests to run (required)
+
+`all` (the default), `desktop` or `mobile` - the UI type whose tests run:
+
+| Value     | Runs                           | Launch name                   | `uiType`  |
+| --------- | ------------------------------ | ----------------------------- | --------- |
+| `all`     | every test                     | `Github Action All Tests`     | `all`     |
+| `desktop` | the `tests/web/desktop` folder | `Github Action Desktop Tests` | `desktop` |
+| `mobile`  | the `tests/web/mobile` folder  | `Github Action Mobile Tests`  | `mobile`  |
+
+The choice is shown in three places, so the runs of one kind are told from the others:
+
+- the name of the workflow run on the *Actions* tab
+  (`Puppeteer DocServer test - mobile tests - kim - linux`) and the Telegram message;
+- the name of the ReportPortal launch (unless section 10 sets another);
+- the `uiType` attribute of the launch - filter the launches by `uiType:mobile`, or build a
+  widget on it, whatever the launch is named.
+
+With a test path (section 6) the path decides: `uiType` is the type of the folder it is in
+(`mobile` for `tests/web/mobile/word`), and the run fails in *Prepare Test Matrix* when the
+path belongs to another type than the one chosen here. Leave `all` when a path is set.
+
+A type whose folder the `Dep.Tests` ref does not have fails in *Prepare Test Matrix* too.
+
+## 5. Dep.Tests branch override (optional)
 
 The name of a `Dep.Tests` branch or tag to use instead of the stand default.
 
@@ -64,21 +88,22 @@ The name of a `Dep.Tests` branch or tag to use instead of the stand default.
 The server is still determined by the stand, not by the branch. This is what allows the
 same branch to be run against release and hotfix in turn.
 
-## 5. Specific test file or directory (optional)
+## 6. Specific test file or directory (optional)
 
 A path to a single test or folder inside `tests/`.
 
-- Empty: the full test set runs.
-- Set (for example `tests/desktop/word/hometab/font`): only that file or folder runs.
+- Empty: the tests chosen in section 4 run.
+- Set (for example `tests/web/desktop/word/hometab/font`): only that file or folder runs, and
+  the launch is named `Github Action Target Tests`.
 
-## 6. Tests per parallel chunk (default `100`)
+## 7. Tests per parallel chunk (default `100`)
 
 The chunk size — the number of tests in one parallel batch. All discovered tests are split
 into chunks of this size, and each chunk runs as a separate parallel job. A smaller value
 produces more chunks, reducing wall-clock time but using more runners. If there are fewer
 tests than the chunk size, a single chunk runs.
 
-## 7. Clear test files from the remote server after each chunk (default on)
+## 8. Clear test files from the remote server after each chunk (default on)
 
 Controls cleanup of the files the tests create on the remote server.
 
@@ -87,7 +112,7 @@ Controls cleanup of the files the tests create on the remote server.
 
 Cleanup targets the same server selected by the stand. Keep this enabled for regular runs.
 
-## 8. ReportPortal project name (default `docsserver`)
+## 9. ReportPortal project name (default `docsserver`)
 
 The ReportPortal project that receives the results.
 
@@ -95,14 +120,19 @@ The ReportPortal project that receives the results.
 - A personal project uses the format `name_personal` (for example `imuminov_personal`).
   Use it to send results to your own project instead of the shared one.
 
-## 9. ReportPortal launch name (optional)
+## 10. ReportPortal launch name (optional)
 
 The name of the launch in ReportPortal.
 
-- Empty: the name is generated automatically (by run type and chunk number).
-- Set: the launch is named as entered.
+- Empty: the name follows the tests of the run - `Github Action All Tests`,
+  `Github Action Desktop Tests` or `Github Action Mobile Tests` (section 4), and
+  `Github Action Target Tests` with a test path (section 6).
+- Set: the launch is named as entered. Its `uiType` attribute still tells the tests it holds.
 
-## 10. ReportPortal API key (optional)
+The auto-analyzer (section 12) compares a launch with the earlier launches of the same name,
+so each name keeps a history of its own.
+
+## 11. ReportPortal API key (optional)
 
 The ReportPortal access key.
 
@@ -111,7 +141,7 @@ The ReportPortal access key.
 
 Leave empty unless a different key is required.
 
-## 11. Run the ReportPortal auto-analyzer (default on)
+## 12. Run the ReportPortal auto-analyzer (default on)
 
 Starts the ReportPortal auto-analyzer as soon as the launch is complete, so the failures do
 not have to be analyzed by hand. The analyzer compares them with the history of launches
@@ -137,8 +167,9 @@ A failure to start the analysis is reported as a warning and does not fail the r
 1. **Use workflow from**: `master`.
 2. **Stand to test**: the target server (`kim` for release, `doc-linux` for hotfix).
 3. **Operating system**: `linux`, or another single operating system.
-4. Leave the remaining fields at their defaults.
-5. **Run workflow**.
+4. **Tests to run**: `all`, or `desktop` / `mobile` for the tests of one UI type.
+5. Leave the remaining fields at their defaults.
+6. **Run workflow**.
 
 To run a specific branch against both servers, set **branch** to your branch and run the
 workflow twice — once with `kim`, once with `doc-linux`.
@@ -146,10 +177,20 @@ workflow twice — once with `kim`, once with `doc-linux`.
 Per-chunk status appears on the *Actions* tab, results appear in ReportPortal, and the
 overall outcome is sent to Telegram.
 
+## Several runs at once
+
+One run of this workflow executes at a time. A run started while another is in progress waits
+for it (*Pending* on the *Actions* tab), and so does every run started after: they form a
+queue of up to 100 runs and start one by one, in the order they began to wait. Nothing is
+cancelled, so the desktop and the mobile tests, several stands or several branches can be
+started in a row and left to run.
+
+To drop a run from the queue, cancel it on the *Actions* tab.
+
 ## Required fields
 
-Fields marked with `*` (**Stand to test**, **Operating system**) are required. They have
-default values, so pressing *Run workflow* without changing them is sufficient.
+Fields marked with `*` (**Stand to test**, **Operating system**, **Tests to run**) are required.
+They have default values, so pressing *Run workflow* without changing them is sufficient.
 
 ## What each selector controls
 
@@ -158,6 +199,7 @@ default values, so pressing *Run workflow* without changing them is sufficient.
 | **Use workflow from** (top)    | `run-actions` branch  | workflow code, actions                            |
 | **Stand**                      | target server         | server URL (from secret) and, by its build, the default `Dep.Tests` tag |
 | **branch** field               | `Dep.Tests` ref       | the test code (overrides the stand default)       |
+| **Tests to run**               | UI type               | the folder of tests that runs, the launch name and its `uiType` attribute |
 
 ## Daily and Hourly workflows
 
@@ -172,3 +214,7 @@ The **Daily** and **SaaS Hourly** workflows are structured similarly, with two d
 - They run on a schedule (cron) and can also be started manually via *Run workflow* with
   the same fields (operating system, test path, chunk size, clean, ReportPortal fields).
 - The auto-analyzer runs there as well, always on, in the same job that completes the launch.
+- There is no **Tests to run** field and no `uiType` attribute: they run the `daily` / `hourly`
+  suite of each provider, a fixed list of tests, not a folder.
+- They share one concurrency group without a queue: at most one run waits, and a newer one
+  replaces it - a scheduled run that is late is dropped for the next one instead of piling up.

@@ -1,5 +1,5 @@
 ﻿name: Puppeteer DocServer test
-run-name: Puppeteer DocServer test - ${{ inputs.url }} - ${{ inputs.os }}
+run-name: Puppeteer DocServer test - ${{ inputs.ui_type }} tests - ${{ inputs.url }} - ${{ inputs.os }}
 
 on:
   workflow_dispatch:
@@ -22,6 +22,15 @@ on:
           - windows
           - linux
           - macos
+      ui_type:
+        description: 'Tests to run: all, or the ones of one UI type'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - desktop
+          - mobile
       branch:
         description: 'Dep.Tests branch or tag override — leave empty to use the tag of the stand build'
         required: false
@@ -68,9 +77,12 @@ on:
         default: true
         type: boolean
 
+# One run at a time; the ones started meanwhile wait in the queue in the order they came (up to 100),
+# instead of the newest one replacing the one already waiting.
 concurrency:
   group: puppeteer-docserver
   cancel-in-progress: false
+  queue: max
 
 jobs:
   branch-config:
@@ -99,6 +111,9 @@ jobs:
       matrix: ${{ steps.prepare.outputs.matrix }}
       num_chunks: ${{ steps.prepare.outputs.num_chunks }}
       chunk_size: ${{ steps.prepare.outputs.chunk_size }}
+      test_path: ${{ steps.prepare.outputs.test_path }}
+      ui_type: ${{ steps.prepare.outputs.ui_type }}
+      launch_name: ${{ steps.launch.outputs.name }}
 
     steps:
       - name: Checkout repository
@@ -113,6 +128,24 @@ jobs:
           branch: ${{ needs.branch-config.outputs.branch }}
           read_pat: ${{ secrets.READ_PAT }}
           test_path: ${{ inputs.test_path }}
+          ui_type: ${{ inputs.ui_type }}
+
+      - name: Name the ReportPortal launch
+        id: launch
+        shell: bash
+        env:
+          LAUNCH_NAME: ${{ inputs.launch_name }}
+          TEST_PATH: ${{ inputs.test_path }}
+          UI_TYPE: ${{ inputs.ui_type }}
+        run: |
+          if [ -z "$LAUNCH_NAME" ]; then
+            if [ -n "$TEST_PATH" ]; then
+              LAUNCH_NAME="Github Action Target Tests"
+            else
+              LAUNCH_NAME="Github Action ${UI_TYPE^} Tests"
+            fi
+          fi
+          echo "name=$LAUNCH_NAME" >> "$GITHUB_OUTPUT"
 
   install-deps-windows:
     name: Install dependencies - windows
@@ -170,11 +203,12 @@ jobs:
           os_name: windows
           os_config: config_chrome_win.json
           project_name: ${{ inputs.project_name || 'docsserver' }}
-          launch_name: ${{ inputs.launch_name || (inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests') }}
+          launch_name: ${{ needs.prepare.outputs.launch_name }}
+          ui_type: ${{ needs.prepare.outputs.ui_type }}
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           branch: ${{ needs.prepare.outputs.branch }}
-          test_path: ${{ inputs.test_path }}
+          test_path: ${{ needs.prepare.outputs.test_path }}
           url: ${{ inputs.url == 'kim' && secrets.URL_RELEASE || inputs.url == 'saul' && secrets.SAUL_TEAMLAB || secrets.URL_HOTFIX }}
 
   run-tests-windows:
@@ -203,7 +237,7 @@ jobs:
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           branch: ${{ needs.prepare.outputs.branch }}
-          test_path: ${{ inputs.test_path }}
+          test_path: ${{ needs.prepare.outputs.test_path }}
           clean: ${{ inputs.clean }}
           url: ${{ inputs.url == 'kim' && secrets.URL_RELEASE || inputs.url == 'saul' && secrets.SAUL_TEAMLAB || secrets.URL_HOTFIX }}
 
@@ -248,11 +282,12 @@ jobs:
           os_name: linux
           os_config: config_chrome_linux.json
           project_name: ${{ inputs.project_name || 'docsserver' }}
-          launch_name: ${{ inputs.launch_name || (inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests') }}
+          launch_name: ${{ needs.prepare.outputs.launch_name }}
+          ui_type: ${{ needs.prepare.outputs.ui_type }}
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           branch: ${{ needs.prepare.outputs.branch }}
-          test_path: ${{ inputs.test_path }}
+          test_path: ${{ needs.prepare.outputs.test_path }}
           url: ${{ inputs.url == 'kim' && secrets.URL_RELEASE || inputs.url == 'saul' && secrets.SAUL_TEAMLAB || secrets.URL_HOTFIX }}
 
   run-tests-linux:
@@ -281,7 +316,7 @@ jobs:
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           branch: ${{ needs.prepare.outputs.branch }}
-          test_path: ${{ inputs.test_path }}
+          test_path: ${{ needs.prepare.outputs.test_path }}
           clean: ${{ inputs.clean }}
           url: ${{ inputs.url == 'kim' && secrets.URL_RELEASE || inputs.url == 'saul' && secrets.SAUL_TEAMLAB || secrets.URL_HOTFIX }}
 
@@ -326,11 +361,12 @@ jobs:
           os_name: macos
           os_config: config_chrome_mac.json
           project_name: ${{ inputs.project_name || 'docsserver' }}
-          launch_name: ${{ inputs.launch_name || (inputs.test_path == '' && 'Github Action All Tests' || 'Github Action Target Tests') }}
+          launch_name: ${{ needs.prepare.outputs.launch_name }}
+          ui_type: ${{ needs.prepare.outputs.ui_type }}
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           branch: ${{ needs.prepare.outputs.branch }}
-          test_path: ${{ inputs.test_path }}
+          test_path: ${{ needs.prepare.outputs.test_path }}
           url: ${{ inputs.url == 'kim' && secrets.URL_RELEASE || inputs.url == 'saul' && secrets.SAUL_TEAMLAB || secrets.URL_HOTFIX }}
 
   run-tests-macos:
@@ -359,7 +395,7 @@ jobs:
           read_pat: ${{ secrets.READ_PAT }}
           report_key: ${{ inputs.api_key || secrets.REPORT_KEY }}
           branch: ${{ needs.prepare.outputs.branch }}
-          test_path: ${{ inputs.test_path }}
+          test_path: ${{ needs.prepare.outputs.test_path }}
           clean: ${{ inputs.clean }}
           url: ${{ inputs.url == 'kim' && secrets.URL_RELEASE || inputs.url == 'saul' && secrets.SAUL_TEAMLAB || secrets.URL_HOTFIX }}
 
@@ -447,6 +483,7 @@ jobs:
           MESSAGE="${MESSAGE}\n*Browser:* chrome"
           MESSAGE="${MESSAGE}\n*Branch:* ${{ needs.prepare.outputs.branch }}"
           MESSAGE="${MESSAGE}\n*Stand:* ${{ github.event.inputs.url }}"
+          MESSAGE="${MESSAGE}\n*Tests:* ${{ needs.prepare.outputs.ui_type }}"
           MESSAGE="${MESSAGE}\n*Status:* ${OVERALL_STATUS}"
           MESSAGE="${MESSAGE}\n"
 
@@ -528,6 +565,7 @@ jobs:
           MESSAGE="${MESSAGE}\n*Browser:* chrome"
           MESSAGE="${MESSAGE}\n*Branch:* ${{ needs.prepare.outputs.branch }}"
           MESSAGE="${MESSAGE}\n*Stand:* ${{ github.event.inputs.url }}"
+          MESSAGE="${MESSAGE}\n*Tests:* ${{ needs.prepare.outputs.ui_type }}"
           MESSAGE="${MESSAGE}\n*Status:* ${OVERALL_STATUS}"
           MESSAGE="${MESSAGE}\n"
 
@@ -609,6 +647,7 @@ jobs:
           MESSAGE="${MESSAGE}\n*Browser:* chrome"
           MESSAGE="${MESSAGE}\n*Branch:* ${{ needs.prepare.outputs.branch }}"
           MESSAGE="${MESSAGE}\n*Stand:* ${{ github.event.inputs.url }}"
+          MESSAGE="${MESSAGE}\n*Tests:* ${{ needs.prepare.outputs.ui_type }}"
           MESSAGE="${MESSAGE}\n*Status:* ${OVERALL_STATUS}"
           MESSAGE="${MESSAGE}\n"
 

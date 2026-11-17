@@ -39,6 +39,10 @@ inputs:
     description: 'Server URL to test against (optional; overrides testOptions.url in the OS config when set)'
     required: false
     default: ''
+  ui_type:
+    description: 'UI type of the tests (all, desktop, mobile); the uiType attribute of the launch, none when empty'
+    required: false
+    default: ''
 
 outputs:
   rp_url:
@@ -164,6 +168,32 @@ runs:
         echo "rp_url=$RP_URL" >> $GITHUB_OUTPUT
         rm -f output.log
         exit $EXIT_CODE
+
+    # run.py of the Dep.Tests tag sets the attributes it knows; this one is added through the API,
+    # so it does not depend on the tag. An attribute only sorts the launches: a failure is a warning.
+    - name: Add the uiType attribute to the launch
+      if: ${{ inputs.ui_type != '' }}
+      shell: bash
+      env:
+        UI_TYPE: ${{ inputs.ui_type }}
+        PROJECT_NAME: ${{ inputs.project_name }}
+        REPORT_API_KEY: ${{ inputs.report_key }}
+        RP_URL: ${{ steps.start.outputs.rp_url }}
+      run: |
+        # A launch URL ends with the id of its launch.
+        if [[ ! "$RP_URL" =~ /([0-9]+)$ ]]; then
+          echo "::warning::No launch id in the launch URL '$RP_URL': the uiType attribute is not added"
+          exit 0
+        fi
+        ENDPOINT=$(jq -r '.endpoint' Dep.Tests/tools/report_portal/config.json)
+        BODY=$(jq -nc --argjson id "${BASH_REMATCH[1]}" --arg type "$UI_TYPE" \
+          '{ids: [$id], attributes: [{action: "CREATE", to: {key: "uiType", value: $type}}]}')
+
+        curl -sS --fail-with-body -X PUT "${ENDPOINT%/}/api/v1/$PROJECT_NAME/launch/info" \
+          -H "Authorization: Bearer $REPORT_API_KEY" \
+          -H "Content-Type: application/json" \
+          -d "$BODY" \
+          || echo "::warning::Failed to add the uiType attribute to the launch, continuing"
 
     - name: Upload launch
       uses: actions/upload-artifact@v5
