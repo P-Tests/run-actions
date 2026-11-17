@@ -48,20 +48,30 @@ settings.
 
 ## 3. Operating system to run on (required)
 
-`windows`, `linux` (the default), or `macos`. Determines which runners the tests execute on:
-one run, one report, on that operating system only. There is no option for all three at once
-- the full set on three systems is too heavy for one run; to cover several, start the workflow
-once per system.
+`windows`, `linux` (the default), `macos`, or `all`. Determines which runners the tests execute
+on.
+
+- One system: one launch in ReportPortal, on that operating system only.
+- `all`: the three systems run **one after another** - windows, then linux, then macos - never at
+  the same time, so the stand is loaded by one system only. Each system reports into a launch
+  of its own: same name, its own `platform` attribute, its own Telegram message. The next
+  system starts when the chunks of the one before are over, whatever their result: failed
+  tests on windows do not stop linux. The run takes about three times as long as one system.
+
+Cancelling the run on the *Actions* tab stops the systems that have not started as well.
 
 ## 4. Tests to run (required)
 
-`all` (the default), `desktop` or `mobile` - the UI type whose tests run:
+`desktop` (the default) or `mobile` - the UI type whose tests run:
 
 | Value     | Runs                           | Launch name                   | `uiType`  |
 | --------- | ------------------------------ | ----------------------------- | --------- |
-| `all`     | every test                     | `Github Action All Tests`     | `all`     |
 | `desktop` | the `tests/web/desktop` folder | `Github Action Desktop Tests` | `desktop` |
 | `mobile`  | the `tests/web/mobile` folder  | `Github Action Mobile Tests`  | `mobile`  |
+
+There is no run of every test at once: start the workflow twice, once per type - the second
+run waits for the first (see *Several runs at once*). The *DocServer - All tests* dashboard in
+ReportPortal puts the desktop and the mobile launches together.
 
 The choice is shown in three places, so the runs of one kind are told from the others:
 
@@ -71,9 +81,9 @@ The choice is shown in three places, so the runs of one kind are told from the o
 - the `uiType` attribute of the launch - filter the launches by `uiType:mobile`, or build a
   widget on it, whatever the launch is named.
 
-With a test path (section 6) the path decides: `uiType` is the type of the folder it is in
-(`mobile` for `tests/web/mobile/word`), and the run fails in *Prepare Test Matrix* when the
-path belongs to another type than the one chosen here. Leave `all` when a path is set.
+With a test path (section 6) the path decides and this field is not used: `uiType` is the type
+of the folder the path is in (`mobile` for `tests/web/mobile/word`, `all` for a path above the
+type folders, such as `tests/web`), and the name of the workflow run shows the path.
 
 A type whose folder the `Dep.Tests` ref does not have fails in *Prepare Test Matrix* too.
 
@@ -124,9 +134,9 @@ The ReportPortal project that receives the results.
 
 The name of the launch in ReportPortal.
 
-- Empty: the name follows the tests of the run - `Github Action All Tests`,
-  `Github Action Desktop Tests` or `Github Action Mobile Tests` (section 4), and
-  `Github Action Target Tests` with a test path (section 6).
+- Empty: the name follows the tests of the run - `Github Action Desktop Tests` or
+  `Github Action Mobile Tests` (section 4), and `Github Action Target Tests` with a test path
+  (section 6).
 - Set: the launch is named as entered. Its `uiType` attribute still tells the tests it holds.
 
 The auto-analyzer (section 12) compares a launch with the earlier launches of the same name,
@@ -166,8 +176,8 @@ A failure to start the analysis is reported as a warning and does not fail the r
 
 1. **Use workflow from**: `master`.
 2. **Stand to test**: the target server (`kim` for release, `doc-linux` for hotfix).
-3. **Operating system**: `linux`, or another single operating system.
-4. **Tests to run**: `all`, or `desktop` / `mobile` for the tests of one UI type.
+3. **Operating system**: `linux`, another single system, or `all` for the three in a row.
+4. **Tests to run**: `desktop` or `mobile`; for both, run the workflow once per type.
 5. Leave the remaining fields at their defaults.
 6. **Run workflow**.
 
@@ -183,7 +193,8 @@ One run of this workflow executes at a time. A run started while another is in p
 for it (*Pending* on the *Actions* tab), and so does every run started after: they form a
 queue of up to 100 runs and start one by one, in the order they began to wait. Nothing is
 cancelled, so the desktop and the mobile tests, several stands or several branches can be
-started in a row and left to run.
+started in a row and left to run. Several operating systems need one run only: `all` in
+section 3.
 
 To drop a run from the queue, cancel it on the *Actions* tab.
 

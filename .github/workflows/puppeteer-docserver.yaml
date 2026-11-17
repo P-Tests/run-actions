@@ -1,5 +1,5 @@
 ﻿name: Puppeteer DocServer test
-run-name: Puppeteer DocServer test - ${{ inputs.ui_type }} tests - ${{ inputs.url }} - ${{ inputs.os }}
+run-name: Puppeteer DocServer test - ${{ inputs.test_path || format('{0} tests', inputs.ui_type) }} - ${{ inputs.url }} - ${{ inputs.os == 'all' && 'all OS' || inputs.os }}
 
 on:
   workflow_dispatch:
@@ -14,21 +14,21 @@ on:
           - doc-linux
           - saul
       os:
-        description: 'Operating system to run on'
+        description: 'Operating system to run on: one, or all of them one after another'
         required: true
         default: 'linux'
         type: choice
         options:
+          - all
           - windows
           - linux
           - macos
       ui_type:
-        description: 'Tests to run: all, or the ones of one UI type'
+        description: 'Tests to run: the ones of one UI type'
         required: true
-        default: 'all'
+        default: 'desktop'
         type: choice
         options:
-          - all
           - desktop
           - mobile
       branch:
@@ -149,7 +149,7 @@ jobs:
 
   install-deps-windows:
     name: Install dependencies - windows
-    if: "inputs.os == 'windows'"
+    if: "inputs.os == 'all' || inputs.os == 'windows'"
     continue-on-error: true
     runs-on: windows-latest
     steps:
@@ -162,7 +162,7 @@ jobs:
 
   install-deps-linux:
     name: Install dependencies - linux
-    if: "inputs.os == 'linux'"
+    if: "inputs.os == 'all' || inputs.os == 'linux'"
     continue-on-error: true
     runs-on: ubuntu-latest
     steps:
@@ -175,7 +175,7 @@ jobs:
 
   install-deps-macos:
     name: Install dependencies - macos
-    if: "inputs.os == 'macos'"
+    if: "inputs.os == 'all' || inputs.os == 'macos'"
     continue-on-error: true
     runs-on: macos-latest
     steps:
@@ -189,7 +189,7 @@ jobs:
   start-launch-windows:
     name: Start Windows Launch
     needs: [prepare]
-    if: "!cancelled() && needs.prepare.result == 'success' && inputs.os == 'windows'"
+    if: "!cancelled() && needs.prepare.result == 'success' && (inputs.os == 'all' || inputs.os == 'windows')"
     runs-on: ubuntu-latest
 
     steps:
@@ -214,7 +214,7 @@ jobs:
   run-tests-windows:
     name: Windows - Chunk ${{ matrix.chunk }}
     needs: [prepare, install-deps-windows, start-launch-windows]
-    if: "!cancelled() && needs.start-launch-windows.result == 'success' && inputs.os == 'windows'"
+    if: "!cancelled() && needs.start-launch-windows.result == 'success' && (inputs.os == 'all' || inputs.os == 'windows')"
     runs-on: windows-latest
     strategy:
       matrix:
@@ -265,10 +265,12 @@ jobs:
           branch: ${{ needs.prepare.outputs.branch }}
           analyze: ${{ inputs.analyze }}
 
+  # The operating systems run one after another, each into a launch of its own: a launch starts when the
+  # chunks of the system before it are over - passed, failed or skipped - so only one system loads the stand.
   start-launch-linux:
     name: Start Linux Launch
-    needs: [prepare]
-    if: "!cancelled() && needs.prepare.result == 'success' && inputs.os == 'linux'"
+    needs: [prepare, run-tests-windows]
+    if: "!cancelled() && needs.prepare.result == 'success' && (inputs.os == 'all' || inputs.os == 'linux')"
     runs-on: ubuntu-latest
 
     steps:
@@ -293,7 +295,7 @@ jobs:
   run-tests-linux:
     name: Linux - Chunk ${{ matrix.chunk }}
     needs: [prepare, install-deps-linux, start-launch-linux]
-    if: "!cancelled() && needs.start-launch-linux.result == 'success' && inputs.os == 'linux'"
+    if: "!cancelled() && needs.start-launch-linux.result == 'success' && (inputs.os == 'all' || inputs.os == 'linux')"
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -346,8 +348,8 @@ jobs:
 
   start-launch-macos:
     name: Start macOS Launch
-    needs: [prepare]
-    if: "!cancelled() && needs.prepare.result == 'success' && inputs.os == 'macos'"
+    needs: [prepare, run-tests-linux]
+    if: "!cancelled() && needs.prepare.result == 'success' && (inputs.os == 'all' || inputs.os == 'macos')"
     runs-on: ubuntu-latest
 
     steps:
@@ -372,7 +374,7 @@ jobs:
   run-tests-macos:
     name: macOS - Chunk ${{ matrix.chunk }}
     needs: [prepare, install-deps-macos, start-launch-macos]
-    if: "!cancelled() && needs.start-launch-macos.result == 'success' && inputs.os == 'macos'"
+    if: "!cancelled() && needs.start-launch-macos.result == 'success' && (inputs.os == 'all' || inputs.os == 'macos')"
     runs-on: macos-latest
     strategy:
       matrix:
@@ -427,7 +429,7 @@ jobs:
     name: Windows Test Summary
     needs: [prepare, finish-launch-windows]
     runs-on: ubuntu-latest
-    if: "!cancelled() && inputs.os == 'windows'"
+    if: "!cancelled() && (inputs.os == 'all' || inputs.os == 'windows')"
 
     steps:
       - name: Checkout repository
@@ -509,7 +511,7 @@ jobs:
     name: Linux Test Summary
     needs: [prepare, finish-launch-linux]
     runs-on: ubuntu-latest
-    if: "!cancelled() && inputs.os == 'linux'"
+    if: "!cancelled() && (inputs.os == 'all' || inputs.os == 'linux')"
 
     steps:
       - name: Checkout repository
@@ -591,7 +593,7 @@ jobs:
     name: macOS Test Summary
     needs: [prepare, finish-launch-macos]
     runs-on: ubuntu-latest
-    if: "!cancelled() && inputs.os == 'macos'"
+    if: "!cancelled() && (inputs.os == 'all' || inputs.os == 'macos')"
 
     steps:
       - name: Checkout repository
