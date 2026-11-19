@@ -55,11 +55,13 @@ settings.
 on.
 
 - One system: one launch in ReportPortal, on that operating system only.
-- `all`: the three systems run **one after another** - windows, then linux, then macos - never at
+- `all`: windows and linux run **one after another** - windows first, then linux - never at
   the same time, so the stand is loaded by one system only. Each system reports into a launch
-  of its own: same name, its own `platform` attribute, its own Telegram message. The next
-  system starts when the chunks of the one before are over, whatever their result: failed
-  tests on windows do not stop linux. The run takes about three times as long as one system.
+  of its own: same name, its own `platform` attribute, its own Telegram message. Linux starts
+  when the windows chunks are over, whatever their result: failed tests on windows do not stop
+  linux. The run takes about twice as long as one system.
+- `macos` runs only when chosen on its own; it is not part of `all`, and the ReportPortal
+  dashboards have no macOS columns - its launches are seen in the launch lists only.
 
 Cancelling the run on the *Actions* tab stops the systems that have not started as well.
 
@@ -159,7 +161,7 @@ A failure to start the analysis is reported as a warning and does not fail the r
 
 1. **Use workflow from**: `master`.
 2. **Stand to test**: the target server (`kim` for release, `doc-linux` for hotfix).
-3. **Operating system**: `linux`, another single system, or `all` for the three in a row.
+3. **Operating system**: `linux`, another single system, or `all` for windows and linux in a row.
 4. Leave the remaining fields at their defaults.
 5. **Run workflow**.
 
@@ -182,7 +184,7 @@ What differs from the desktop workflow:
 | ---------------------- | ------------------------------------ | --------------------------------------- |
 | Workflow               | *Puppeteer DocServer test - Desktop* | *Puppeteer DocServer test - Mobile Web* |
 | Tests                  | `tests/web/desktop`                  | `tests/web/mobile`                      |
-| Operating system       | the one chosen, or all three         | linux                                   |
+| Operating system       | the one chosen, or windows + linux   | linux                                   |
 | Launch name            | `Github Action Desktop Tests`        | `Github Action Mobile Tests`            |
 | `uiType` of the launch | `desktop`                            | `mobile`                                |
 

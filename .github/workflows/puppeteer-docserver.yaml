@@ -1,5 +1,5 @@
 ﻿name: Puppeteer DocServer test - Desktop Web
-run-name: Puppeteer DocServer test - Desktop Web - ${{ inputs.test_path && format('{0} - ', inputs.test_path) || '' }}${{ inputs.url }} - ${{ inputs.os == 'all' && 'all OS' || inputs.os }}
+run-name: Puppeteer DocServer test - Desktop Web - ${{ inputs.test_path && format('{0} - ', inputs.test_path) || '' }}${{ inputs.url }} - ${{ inputs.os == 'all' && 'windows + linux' || inputs.os }}
 
 # The desktop tests of a stand. The mobile tests are run by puppeteer-mobile.yaml, on linux only.
 on:
@@ -15,7 +15,7 @@ on:
           - doc-linux
           - saul
       os:
-        description: 'Operating system to run on: one, or all of them one after another'
+        description: 'Operating system to run on: one, or all - windows, then linux'
         required: true
         default: 'linux'
         type: choice
@@ -168,7 +168,7 @@ jobs:
 
   install-deps-macos:
     name: Install dependencies - macos
-    if: "inputs.os == 'all' || inputs.os == 'macos'"
+    if: "inputs.os == 'macos'"
     continue-on-error: true
     runs-on: macos-latest
     steps:
@@ -258,8 +258,8 @@ jobs:
           branch: ${{ needs.prepare.outputs.branch }}
           analyze: ${{ inputs.analyze }}
 
-  # The operating systems run one after another, each into a launch of its own: a launch starts when the
-  # chunks of the system before it are over - passed, failed or skipped - so only one system loads the stand.
+  # all runs windows, then linux, each into a launch of its own: the linux launch starts when the windows
+  # chunks are over - passed, failed or skipped - so only one system loads the stand. macos is never part of all.
   start-launch-linux:
     name: Start Linux Launch
     needs: [prepare, run-tests-windows]
@@ -341,8 +341,8 @@ jobs:
 
   start-launch-macos:
     name: Start macOS Launch
-    needs: [prepare, run-tests-linux]
-    if: "!cancelled() && needs.prepare.result == 'success' && (inputs.os == 'all' || inputs.os == 'macos')"
+    needs: [prepare]
+    if: "!cancelled() && needs.prepare.result == 'success' && inputs.os == 'macos'"
     runs-on: ubuntu-latest
 
     steps:
@@ -367,7 +367,7 @@ jobs:
   run-tests-macos:
     name: macOS - Chunk ${{ matrix.chunk }}
     needs: [prepare, install-deps-macos, start-launch-macos]
-    if: "!cancelled() && needs.start-launch-macos.result == 'success' && (inputs.os == 'all' || inputs.os == 'macos')"
+    if: "!cancelled() && needs.start-launch-macos.result == 'success' && inputs.os == 'macos'"
     runs-on: macos-latest
     strategy:
       matrix:
@@ -586,7 +586,7 @@ jobs:
     name: macOS Test Summary
     needs: [prepare, finish-launch-macos]
     runs-on: ubuntu-latest
-    if: "!cancelled() && (inputs.os == 'all' || inputs.os == 'macos')"
+    if: "!cancelled() && inputs.os == 'macos'"
 
     steps:
       - name: Checkout repository
